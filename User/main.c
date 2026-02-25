@@ -38,8 +38,24 @@ int main(void)
 	/* 串口显示初始化信息 */
 	UART1_SendString("\r\n========================================\r\n");
 	UART1_SendString("PMOD TX / Hardware CAN RX System\r\n");
-	UART1_SendString("CAN Mode: Normal (125kbps)\r\n");
-	UART1_SendString("PMOD -> Hardware CAN\r\n");
+	UART1_SendString("CAN Mode: Normal (125kbps) ABOM=ON\r\n");
+	UART1_SendString("Waiting for PMOD CAN messages...\r\n");
+	
+	/* 检查CH9434状态 */
+	{
+		uint8_t mode = PMOD_CAN_GetMode();
+		sprintf(strTx, "[CH9434] Mode:0x%02X ", mode);
+		UART1_SendString(strTx);
+		if(mode == 0x00) {
+			UART1_SendString("- Normal OK\r\n");
+		} else if(mode == 0x80) {
+			UART1_SendString("- Config mode ERROR!\r\n");
+		} else if(mode == 0x01) {
+			UART1_SendString("- Sleep mode ERROR!\r\n");
+		} else {
+			UART1_SendString("- Unknown, Check SPI!\r\n");
+		}
+	}
 	UART1_SendString("========================================\r\n");
 	
 	while (1)

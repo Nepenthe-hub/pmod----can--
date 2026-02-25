@@ -22,17 +22,17 @@ void MyCAN_Init(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 	
 	CAN_InitTypeDef CAN_InitStructure;
-	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal;  // 正常模式：可以接收外部PMOD发来的消息
-	CAN_InitStructure.CAN_Prescaler = 48;		//波特率 = 36M / 48 / (1 + 2 + 3) = 125K
-	CAN_InitStructure.CAN_BS1 = CAN_BS1_2tq;
-	CAN_InitStructure.CAN_BS2 = CAN_BS2_3tq;
-	CAN_InitStructure.CAN_SJW = CAN_SJW_2tq;
+	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal;  // 正常模式
+	CAN_InitStructure.CAN_Prescaler = 36;		// 波特率 = 36M / 36 / 8 = 125K
+	CAN_InitStructure.CAN_BS1 = CAN_BS1_5tq;    // 采样点 = (1+5)/8 = 75%
+	CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq;
+	CAN_InitStructure.CAN_SJW = CAN_SJW_1tq;
 	CAN_InitStructure.CAN_NART = DISABLE;
 	CAN_InitStructure.CAN_TXFP = DISABLE;
 	CAN_InitStructure.CAN_RFLM = DISABLE;
 	CAN_InitStructure.CAN_AWUM = DISABLE;
 	CAN_InitStructure.CAN_TTCM = DISABLE;
-	CAN_InitStructure.CAN_ABOM = DISABLE;
+	CAN_InitStructure.CAN_ABOM = ENABLE;  // 启用自动总线恢复
 	CAN_Init(CAN1, &CAN_InitStructure);
 
 	CAN_FilterInitTypeDef CAN_FilterInitStructure;

@@ -778,7 +778,7 @@ I (.\Library\stm32f10x_usart.h)(0x4D783BB4)
 I (.\Library\stm32f10x_wwdg.h)(0x4D783BB4)
 I (.\Library\misc.h)(0x4D783BB4)
 F (.\System\Delay.h)(0x6130920D)()
-F (.\User\main.c)(0x69897839)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I .\Start -I .\Library -I .\User -I .\System -I .\Hardware --no-multibyte-chars-I.\RTE\_Target_1-ID:\keil_5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include-ID:\keil_5\ARM\CMSIS\Include-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\objects\main.o --omf_browse .\objects\main.crf --depend .\objects\main.d)
+F (.\User\main.c)(0x699E9056)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I .\Start -I .\Library -I .\User -I .\System -I .\Hardware --no-multibyte-chars-I.\RTE\_Target_1-ID:\keil_5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include-ID:\keil_5\ARM\CMSIS\Include-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\objects\main.o --omf_browse .\objects\main.crf --depend .\objects\main.d)
 I (.\Start\stm32f10x.h)(0x68F25A08)
 I (.\Start\core_cm3.h)(0x4D523B58)
 I (D:\keil_5\ARM\ARMCC\include\stdint.h)(0x588B8344)
@@ -810,8 +810,8 @@ I (.\Library\misc.h)(0x4D783BB4)
 I (.\System\Delay.h)(0x6130920D)
 I (.\Hardware\UART.h)(0x68FDF830)
 I (.\Hardware\Key.h)(0x615AC3EF)
-I (.\Hardware\MyCAN.h)(0x6982DDB1)
-I (.\Hardware\PMOD_CAN.h)(0x6982DDB1)
+I (.\Hardware\MyCAN.h)(0x699D715D)
+I (.\Hardware\PMOD_CAN.h)(0x699E9043)
 I (.\Hardware\Timer.h)(0x6982DDB1)
 I (D:\keil_5\ARM\ARMCC\include\stdio.h)(0x588B8344)
 F (.\User\stm32f10x_conf.h)(0x4D99A59E)()
@@ -846,8 +846,8 @@ I (.\Library\stm32f10x_usart.h)(0x4D783BB4)
 I (.\Library\stm32f10x_wwdg.h)(0x4D783BB4)
 I (.\Library\misc.h)(0x4D783BB4)
 F (.\User\stm32f10x_it.h)(0x4D99A59E)()
-F (.\Hardware\CH9434.c)(0x6982DC73)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I .\Start -I .\Library -I .\User -I .\System -I .\Hardware --no-multibyte-chars-I.\RTE\_Target_1-ID:\keil_5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include-ID:\keil_5\ARM\CMSIS\Include-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\objects\ch9434.o --omf_browse .\objects\ch9434.crf --depend .\objects\ch9434.d)
-I (Hardware\CH9434.h)(0x6982D8BA)
+F (.\Hardware\CH9434.c)(0x699E8FFF)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I .\Start -I .\Library -I .\User -I .\System -I .\Hardware --no-multibyte-chars-I.\RTE\_Target_1-ID:\keil_5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include-ID:\keil_5\ARM\CMSIS\Include-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\objects\ch9434.o --omf_browse .\objects\ch9434.crf --depend .\objects\ch9434.d)
+I (Hardware\CH9434.h)(0x699E90BE)
 I (.\Start\stm32f10x.h)(0x68F25A08)
 I (.\Start\core_cm3.h)(0x4D523B58)
 I (D:\keil_5\ARM\ARMCC\include\stdint.h)(0x588B8344)
@@ -877,7 +877,7 @@ I (.\Library\stm32f10x_usart.h)(0x4D783BB4)
 I (.\Library\stm32f10x_wwdg.h)(0x4D783BB4)
 I (.\Library\misc.h)(0x4D783BB4)
 I (Hardware\SPI.h)(0x697C45A2)
-F (.\Hardware\CH9434.h)(0x6982D8BA)()
+F (.\Hardware\CH9434.h)(0x699E90BE)()
 F (.\Hardware\SPI.c)(0x697C498E)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I .\Start -I .\Library -I .\User -I .\System -I .\Hardware --no-multibyte-chars-I.\RTE\_Target_1-ID:\keil_5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include-ID:\keil_5\ARM\CMSIS\Include-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\objects\spi.o --omf_browse .\objects\spi.crf --depend .\objects\spi.d)
 I (Hardware\SPI.h)(0x697C45A2)
 I (.\Start\stm32f10x.h)(0x68F25A08)
@@ -980,7 +980,7 @@ I (.\Library\stm32f10x_wwdg.h)(0x4D783BB4)
 I (.\Library\misc.h)(0x4D783BB4)
 I (.\System\Delay.h)(0x6130920D)
 F (.\Hardware\Key.h)(0x615AC3EF)()
-F (.\Hardware\MyCAN.c)(0x6982DC26)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I .\Start -I .\Library -I .\User -I .\System -I .\Hardware --no-multibyte-chars-I.\RTE\_Target_1-ID:\keil_5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include-ID:\keil_5\ARM\CMSIS\Include-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\objects\mycan.o --omf_browse .\objects\mycan.crf --depend .\objects\mycan.d)
+F (.\Hardware\MyCAN.c)(0x699E728C)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I .\Start -I .\Library -I .\User -I .\System -I .\Hardware --no-multibyte-chars-I.\RTE\_Target_1-ID:\keil_5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include-ID:\keil_5\ARM\CMSIS\Include-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\objects\mycan.o --omf_browse .\objects\mycan.crf --depend .\objects\mycan.d)
 I (.\Start\stm32f10x.h)(0x68F25A08)
 I (.\Start\core_cm3.h)(0x4D523B58)
 I (D:\keil_5\ARM\ARMCC\include\stdint.h)(0x588B8344)
@@ -1009,9 +1009,9 @@ I (.\Library\stm32f10x_tim.h)(0x4D783BB4)
 I (.\Library\stm32f10x_usart.h)(0x4D783BB4)
 I (.\Library\stm32f10x_wwdg.h)(0x4D783BB4)
 I (.\Library\misc.h)(0x4D783BB4)
-F (.\Hardware\MyCAN.h)(0x6982DDB1)()
-F (.\Hardware\PMOD_CAN.c)(0x6982DC3A)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I .\Start -I .\Library -I .\User -I .\System -I .\Hardware --no-multibyte-chars-I.\RTE\_Target_1-ID:\keil_5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include-ID:\keil_5\ARM\CMSIS\Include-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\objects\pmod_can.o --omf_browse .\objects\pmod_can.crf --depend .\objects\pmod_can.d)
-I (Hardware\PMOD_CAN.h)(0x6982DDB1)
+F (.\Hardware\MyCAN.h)(0x699D715D)()
+F (.\Hardware\PMOD_CAN.c)(0x699E90D1)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I .\Start -I .\Library -I .\User -I .\System -I .\Hardware --no-multibyte-chars-I.\RTE\_Target_1-ID:\keil_5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include-ID:\keil_5\ARM\CMSIS\Include-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\objects\pmod_can.o --omf_browse .\objects\pmod_can.crf --depend .\objects\pmod_can.d)
+I (Hardware\PMOD_CAN.h)(0x699E9043)
 I (.\Start\stm32f10x.h)(0x68F25A08)
 I (.\Start\core_cm3.h)(0x4D523B58)
 I (D:\keil_5\ARM\ARMCC\include\stdint.h)(0x588B8344)
@@ -1040,8 +1040,8 @@ I (.\Library\stm32f10x_tim.h)(0x4D783BB4)
 I (.\Library\stm32f10x_usart.h)(0x4D783BB4)
 I (.\Library\stm32f10x_wwdg.h)(0x4D783BB4)
 I (.\Library\misc.h)(0x4D783BB4)
-I (Hardware\CH9434.h)(0x6982D8BA)
-F (.\Hardware\PMOD_CAN.h)(0x6982DDB1)()
+I (Hardware\CH9434.h)(0x699E90BE)
+F (.\Hardware\PMOD_CAN.h)(0x699E9043)()
 F (.\Hardware\Timer.c)(0x6982DB72)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork --split_sections -I .\Start -I .\Library -I .\User -I .\System -I .\Hardware --no-multibyte-chars-I.\RTE\_Target_1-ID:\keil_5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include-ID:\keil_5\ARM\CMSIS\Include-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER-o .\objects\timer.o --omf_browse .\objects\timer.crf --depend .\objects\timer.d)
 I (Hardware\Timer.h)(0x6982DDB1)
 I (.\Start\stm32f10x.h)(0x68F25A08)

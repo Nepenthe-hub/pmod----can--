@@ -1,216 +1,313 @@
 #include "CH9434.h"
-#include "SPI.h"  // ÒıÓÃµ×²ãSPIÇı¶¯
+#include "SPI.h"
 
 /**
-  * @brief  Ïò CH9434 Ğ´Èë¼Ä´æÆ÷
-  * @param  addr: ¼Ä´æÆ÷µØÖ·
-  * @param  val:  Ğ´ÈëµÄÖµ
-  */
-void CH9434_WriteReg(uint8_t addr, uint8_t val)
+ * @brief  CH9434D é€šè¿‡ SPI å†™ 8 ä½å¯„å­˜å™¨
+ */
+void CH9434_Write8(uint8_t addr, uint8_t val)
 {
     SPI_CS_LOW();
-    BSP_SPI_SwapByte(CH9434_CMD_WRITE); // ÃüÁî
-    BSP_SPI_SwapByte(addr);             // µØÖ·
-    BSP_SPI_SwapByte(val);              // Êı¾İ
+    BSP_SPI_SwapByte(addr | CH9434_SPI_WRITE_BIT);
+    for(volatile int d=0; d<30; d++);  // >2us @72MHz
+    BSP_SPI_SwapByte(val);
     SPI_CS_HIGH();
+    for(volatile int d=0; d<30; d++);  // >2us @72MHz
 }
 
 /**
-  * @brief  ´Ó CH9434 ¶ÁÈ¡¼Ä´æÆ÷
-  * @param  addr: ¼Ä´æÆ÷µØÖ·
-  * @retval ¶ÁÈ¡µ½µÄÖµ
-  */
-uint8_t CH9434_ReadReg(uint8_t addr)
+ * @brief  CH9434D è¯»/å†™ 32ä½ CAN å¯„å­˜å™¨
+ * @param  can_reg_addr: CAN å†…éƒ¨å¯„å­˜å™¨åœ°å€
+ * @param  write_val: è¦å†™å…¥çš„ 32 ä½å€¼
+ * @param  is_write: 1 ä¸ºå†™æ“ä½œï¼Œ0 ä¸ºè¯»æ“ä½œ
+ * @retval è¯»æ“ä½œæ—¶è¿”å› 32 ä½å¯„å­˜å™¨å€¼ï¼›å†™æ“ä½œæ—¶è¿”å› 0
+ */
+uint32_t CH9434_AccessCANReg32(uint8_t can_reg_addr, uint32_t write_val, uint8_t is_write)
 {
-    uint8_t val;
+    uint32_t read_val = 0;
+
     SPI_CS_LOW();
-    BSP_SPI_SwapByte(CH9434_CMD_READ);  // ÃüÁî
-    BSP_SPI_SwapByte(addr);             // µØÖ·
-    val = BSP_SPI_SwapByte(0xFF);       // ·¢ËÍDummy ByteÒÔ²úÉúÊ±ÖÓ¶ÁÈ¡Êı¾İ
+    if (is_write) {
+        BSP_SPI_SwapByte(CH9434_REG_CAN | CH9434_SPI_WRITE_BIT); // 0xC6
+    } else {
+        BSP_SPI_SwapByte(CH9434_REG_CAN);                        // 0x46
+    }
+
+    for(volatile int d=0; d<30; d++);  // >2us @72MHz
+
+    BSP_SPI_SwapByte(can_reg_addr);
+
+    if (is_write) {
+        BSP_SPI_SwapByte((uint8_t)(write_val & 0xFF));
+        BSP_SPI_SwapByte((uint8_t)((write_val >> 8) & 0xFF));
+        BSP_SPI_SwapByte((uint8_t)((write_val >> 16) & 0xFF));
+        BSP_SPI_SwapByte((uint8_t)((write_val >> 24) & 0xFF));
+    } else {
+        read_val  = (uint32_t)BSP_SPI_SwapByte(0xFF);
+        read_val |= (uint32_t)BSP_SPI_SwapByte(0xFF) << 8;
+        read_val |= (uint32_t)BSP_SPI_SwapByte(0xFF) << 16;
+        read_val |= (uint32_t)BSP_SPI_SwapByte(0xFF) << 24;
+    }
+
     SPI_CS_HIGH();
-    return val;
+    for(volatile int d=0; d<20; d++);
+
+    return read_val;
 }
 
 /**
-  * @brief  ÉèÖÃCH9434¹¤×÷Ä£Ê½
-  * @param  mode: ¹¤×÷Ä£Ê½
-  */
-void CH9434_SetMode(uint8_t mode)
+ * @brief  å¯ç”¨ CH9434D çš„é»˜è®¤å¼•è„šåŠŸèƒ½
+ * @param  pin_addr: é»˜è®¤å¼•è„šåœ°å€ (ä¾‹å¦‚ CAN_TX_RX ä¸º 6)
+ */
+void CH9434_EnableDefaultPin(uint8_t pin_addr)
 {
-    CH9434_WriteReg(CH9434_REG_CANCTRL, mode);
-    
-    // µÈ´ıÄ£Ê½ÇĞ»»Íê³É
-    uint8_t timeout = 100;
-    while(((CH9434_ReadReg(CH9434_REG_CANSTAT) & CANSTAT_OPMOD_MASK) != mode) && timeout--)
-    {
-        for(volatile int i=0; i<1000; i++); // ¼òµ¥ÑÓÊ±
+    uint8_t status = 0;
+
+    /* å‘é€å¼€å¯å‘½ä»¤ */
+    SPI_CS_LOW();
+    BSP_SPI_SwapByte(CH9434_REG_IO_SEL_FUN | CH9434_SPI_WRITE_BIT); // 0xC5
+    for(volatile int d=0; d<10; d++);
+    BSP_SPI_SwapByte(0x03);      // å­å‘½ä»¤ï¼š0x03 å¼€å¯é»˜è®¤å¼•è„šä½¿èƒ½
+    BSP_SPI_SwapByte(pin_addr);  // é»˜è®¤å¼•è„šåœ°å€
+    BSP_SPI_SwapByte(0x01);      // 1: ä½¿èƒ½
+    BSP_SPI_SwapByte(0xA5);      // æ ‡å¿—ä½å†™å…¥ 0xA5
+    SPI_CS_HIGH();
+
+    for(volatile int d=0; d<20; d++);
+
+    /* è½®è¯¢ç­‰å¾…èŠ¯ç‰‡åº”ç­” 0x5A */
+    uint16_t timeout = 1000;
+    while(timeout--) {
+        SPI_CS_LOW();
+        BSP_SPI_SwapByte(CH9434_REG_IO_SEL_FUN); // è¯»æ“ä½œ 0x45
+        for(volatile int d=0; d<10; d++);
+        BSP_SPI_SwapByte(0xFF);
+        BSP_SPI_SwapByte(0xFF);
+        status = BSP_SPI_SwapByte(0xFF);
+        SPI_CS_HIGH();
+
+        if(status == 0x5A) break;
+        for(volatile int d=0; d<20; d++);
     }
 }
 
 /**
-  * @brief  ³õÊ¼»¯ CH9434 Îª CAN Ä£Ê½
-  * @param  bitrate: CAN²¨ÌØÂÊ (ÀıÈç 250000 Îª 250kbps)
-  */
-void CH9434_Init_CAN(uint32_t bitrate)
+ * @brief  è¯»å– CAN æ§åˆ¶å™¨å½“å‰å·¥ä½œæ¨¡å¼
+ * @retval 0x00=æ­£å¸¸æ¨¡å¼, 0x80=åˆå§‹åŒ–/é…ç½®æ¨¡å¼, 0x01=ç¡çœ æ¨¡å¼
+ */
+uint8_t CH9434_GetMode(void)
 {
-    /* 1. ³õÊ¼»¯µ×²ãSPIÓ²¼ş */
+    uint32_t statr = CH9434_AccessCANReg32(CAN_STATR, 0, 0);
+
+    if (statr & CAN_STATR_SLAK)
+        return 0x01;  // ç¡çœ æ¨¡å¼
+    if (statr & CAN_STATR_INAK)
+        return 0x80;  // åˆå§‹åŒ–/é…ç½®æ¨¡å¼
+    return 0x00;      // æ­£å¸¸æ¨¡å¼
+}
+
+/**
+ * @brief  è¯»å– CAN å†…éƒ¨å¯„å­˜å™¨ (è¿”å›ä½ 8 ä½)
+ * @param  can_reg_addr: CAN å†…éƒ¨å¯„å­˜å™¨åœ°å€
+ * @retval å¯„å­˜å™¨å€¼çš„ä½ 8 ä½
+ */
+uint8_t CH9434_ReadReg(uint8_t can_reg_addr)
+{
+    return (uint8_t)(CH9434_AccessCANReg32(can_reg_addr, 0, 0) & 0xFF);
+}
+
+/**
+ * @brief  æ ¹æ®æ³¢ç‰¹ç‡è®¡ç®— CAN_BTIMR å¯„å­˜å™¨å€¼
+ *         CH9434D å†…éƒ¨ CAN æ—¶é’Ÿ = 96MHz
+ *         é‡‡ç”¨ 8 ä¸ªæ—¶é—´é‡å­: 1(SYNC) + 5(TS1) + 2(TS2) = 8tq
+ *         é‡‡æ ·ç‚¹ = (1+5)/8 = 75%
+ * @param  baudrate: ç›®æ ‡æ³¢ç‰¹ç‡ (å¦‚ 125000, 250000, 500000, 1000000)
+ * @retval BTIMR å¯„å­˜å™¨å€¼
+ */
+static uint32_t CH9434_CalcBTIMR(uint32_t baudrate)
+{
+    uint32_t brp;
+    uint32_t total_tq = 8;  // 1 + 5 + 2
+
+    /* BRP = (96MHz / baudrate / total_tq) - 1 */
+    brp = (96000000UL / baudrate / total_tq) - 1;
+    if (brp > 1023) brp = 1023;
+
+    /* BTIMR: [25:24]=SJW(0), [22:20]=TS2(1), [19:16]=TS1(4), [9:0]=BRP */
+    return (0UL << 24) | (1UL << 20) | (4UL << 16) | brp;
+}
+
+/**
+ * @brief  åˆå§‹åŒ– CH9434D çš„ CAN æ§åˆ¶å™¨
+ * @param  baudrate: CAN æ³¢ç‰¹ç‡ (å¦‚ 125000 è¡¨ç¤º 125kbps)
+ */
+void CH9434_Init_CAN(uint32_t baudrate)
+{
+    uint16_t timeout;
+
+    /* 1. åˆå§‹åŒ–åº•å±‚ SPI */
     BSP_SPI_Init();
-    
-    /* ¼òµ¥ÑÓÊ±µÈ´ıĞ¾Æ¬ÉÏµçÎÈ¶¨ */
     for(volatile int i=0; i<10000; i++);
 
-    /* 2. ½øÈëÅäÖÃÄ£Ê½ */
-    CH9434_SetMode(CANCTRL_REQOP_CONFIG);
+    /* 2. å¯ç”¨ CAN å¼•è„šå¤ç”¨åŠŸèƒ½ */
+    CH9434_EnableDefaultPin(CH9434_PIN_CAN);
 
-    /* 3. ÅäÖÃCANÎ»Ê±Ğò */
-    /* ¼ÙÉè8MHz¾§Õñ£¬ÅäÖÃ³£ÓÃ²¨ÌØÂÊ */
-    if(bitrate == 1000000) {        // 1Mbps
-        CH9434_WriteReg(CH9434_REG_CNF1, 0x00);  // SJW=1, BRP=1
-        CH9434_WriteReg(CH9434_REG_CNF2, 0x80);  // BTLMODE=1, PHSEG1=1
-        CH9434_WriteReg(CH9434_REG_CNF3, 0x00);  // PHSEG2=1
-    }
-    else if(bitrate == 500000) {    // 500kbps
-        CH9434_WriteReg(CH9434_REG_CNF1, 0x00);  // SJW=1, BRP=1
-        CH9434_WriteReg(CH9434_REG_CNF2, 0x91);  // BTLMODE=1, PHSEG1=2
-        CH9434_WriteReg(CH9434_REG_CNF3, 0x01);  // PHSEG2=2
-    }
-    else if(bitrate == 250000) {    // 250kbps
-        CH9434_WriteReg(CH9434_REG_CNF1, 0x01);  // SJW=1, BRP=2
-        CH9434_WriteReg(CH9434_REG_CNF2, 0x91);  // BTLMODE=1, PHSEG1=2
-        CH9434_WriteReg(CH9434_REG_CNF3, 0x01);  // PHSEG2=2
-    }
-    else if(bitrate == 125000) {    // 125kbps (ÓëSTM32Ó²¼şCANÆ¥Åä)
-        CH9434_WriteReg(CH9434_REG_CNF1, 0x03);  // SJW=1, BRP=4
-        CH9434_WriteReg(CH9434_REG_CNF2, 0x91);  // BTLMODE=1, PHSEG1=2
-        CH9434_WriteReg(CH9434_REG_CNF3, 0x01);  // PHSEG2=2
-    }
-    else {                          // Ä¬ÈÏ125kbps
-        CH9434_WriteReg(CH9434_REG_CNF1, 0x03);  // SJW=1, BRP=4
-        CH9434_WriteReg(CH9434_REG_CNF2, 0x91);  // BTLMODE=1, PHSEG1=2
-        CH9434_WriteReg(CH9434_REG_CNF3, 0x01);  // PHSEG2=2
-    }
+    /* 3. å…ˆå¤ä½ CAN æ§åˆ¶å™¨ (RST å•ç‹¬å†™ï¼Œå¤ä½åèŠ¯ç‰‡è¿›å…¥ç¡çœ æ¨¡å¼) */
+    CH9434_AccessCANReg32(CAN_CTLR, CAN_CTLR_RST, 1);
+    for(volatile int i=0; i<1000; i++);  // ç­‰å¾…å¤ä½å®Œæˆ
 
-    /* 4. ÅäÖÃ½ÓÊÕ¹ıÂËÆ÷ (½ÓÊÕËùÓĞÏûÏ¢) */
-    // ½ÓÊÕ»º³åÇø0ÅäÖÃÎª½ÓÊÕËùÓĞ±ê×¼Ö¡
-    CH9434_WriteReg(CH9434_REG_RXB0CTRL, 0x60);  // ½ÓÊÕËùÓĞÓĞĞ§ÏûÏ¢
+    /* 4. é€€å‡ºç¡çœ ï¼Œè¯·æ±‚è¿›å…¥åˆå§‹åŒ–æ¨¡å¼ (INRQ=1, SLEEP=0) */
+    CH9434_AccessCANReg32(CAN_CTLR, CAN_CTLR_INRQ, 1);
 
-    /* 5. Çå³ıÖĞ¶Ï±êÖ¾ */
-    CH9434_WriteReg(CH9434_REG_CANINTF, 0x00);
-
-    /* 6. Ê¹ÄÜ½ÓÊÕÖĞ¶Ï */
-    CH9434_WriteReg(CH9434_REG_CANINTE, CANINTF_RX0IF);
-
-    /* 7. ½øÈëÕı³£Ä£Ê½ */
-    CH9434_SetMode(CANCTRL_REQOP_NORMAL);
-}
-
-/**
-  * @brief  ¼ì²éÊÇ·ñÓĞCANÏûÏ¢¿É¶Á
-  * @retval 1: ÓĞÏûÏ¢, 0: ÎŞÏûÏ¢
-  */
-uint8_t CH9434_Available(void)
-{
-    uint8_t intf = CH9434_ReadReg(CH9434_REG_CANINTF);
-    return (intf & CANINTF_RX0IF) ? 1 : 0;
-}
-
-/**
-  * @brief  ·¢ËÍCANÏûÏ¢
-  * @param  msg: Ö¸ÏòCANÏûÏ¢½á¹¹µÄÖ¸Õë
-  * @retval 1: ·¢ËÍ³É¹¦, 0: ·¢ËÍÊ§°Ü/³¬Ê±, 2: »º³åÇøÃ¦, 3: ·¢ËÍ´íÎó
-  */
-uint8_t CH9434_SendCANMessage(CAN_Message *msg)
-{
-    uint8_t i;
-    uint16_t timeout;
-    
-    /* ¼ì²é·¢ËÍ»º³åÇøÊÇ·ñ¿ÕÏĞ */
-    uint8_t ctrl = CH9434_ReadReg(CH9434_REG_TXB0CTRL);
-    if(ctrl & 0x08) {  // TXREQÎ»Îª1±íÊ¾ÕıÔÚ·¢ËÍ
-        return 2;  // ·¢ËÍÊ§°Ü£¬»º³åÇøÃ¦
-    }
-    
-    /* ÉèÖÃID */
-    if(msg->extended) {
-        // À©Õ¹Ö¡ (29Î»ID)
-        CH9434_WriteReg(CH9434_REG_TXB0SIDH, (uint8_t)(msg->id >> 21));
-        CH9434_WriteReg(CH9434_REG_TXB0SIDL, (uint8_t)(msg->id >> 13) | 0x08);  // ÉèÖÃEXIDEÎ»
-        CH9434_WriteReg(CH9434_REG_TXB0EID8, (uint8_t)(msg->id >> 8));
-        CH9434_WriteReg(CH9434_REG_TXB0EID0, (uint8_t)msg->id);
-    } else {
-        // ±ê×¼Ö¡ (11Î»ID)
-        CH9434_WriteReg(CH9434_REG_TXB0SIDH, (uint8_t)(msg->id >> 3));
-        CH9434_WriteReg(CH9434_REG_TXB0SIDL, (uint8_t)(msg->id << 5));
-        CH9434_WriteReg(CH9434_REG_TXB0EID8, 0);
-        CH9434_WriteReg(CH9434_REG_TXB0EID0, 0);
-    }
-    
-    /* ÉèÖÃÊı¾İ³¤¶È */
-    CH9434_WriteReg(CH9434_REG_TXB0DLC, msg->dlc & 0x0F);
-    
-    /* Ğ´ÈëÊı¾İ */
-    for(i = 0; i < msg->dlc && i < 8; i++) {
-        CH9434_WriteReg(CH9434_REG_TXB0D0 + i, msg->data[i]);
-    }
-    
-    /* ÇëÇó·¢ËÍ */
-    CH9434_WriteReg(CH9434_REG_TXB0CTRL, 0x08);  // ÉèÖÃTXREQÎ»
-    
-    /* µÈ´ı·¢ËÍÍê³É */
+    /* ç­‰å¾…è¿›å…¥åˆå§‹åŒ–æ¨¡å¼ (INAK=1) */
     timeout = 10000;
     while(timeout--) {
-        ctrl = CH9434_ReadReg(CH9434_REG_TXB0CTRL);
-        if(!(ctrl & 0x08)) {  // TXREQ±»Çå³ı£¬·¢ËÍÍê³É
-            /* ¼ì²éÊÇ·ñÓĞ·¢ËÍ´íÎó */
-            if(ctrl & 0x10) {  // TXERRÎ»
-                return 3;  // ·¢ËÍ´íÎó£¨¿ÉÄÜÊÇÎŞACK£©
-            }
-            return 1;  // ·¢ËÍ³É¹¦
-        }
+        if (CH9434_AccessCANReg32(CAN_STATR, 0, 0) & CAN_STATR_INAK)
+            break;
     }
-    
-    return 0;  // ³¬Ê±
+
+    /* 4. é…ç½®æ³¢ç‰¹ç‡ */
+    CH9434_AccessCANReg32(CAN_BTIMR, CH9434_CalcBTIMR(baudrate), 1);
+
+    /* 5. é…ç½®è¿‡æ»¤å™¨ â€”â€” æ¥æ”¶æ‰€æœ‰æ¶ˆæ¯ */
+    CH9434_AccessCANReg32(CAN_FCTLR, 0x01, 1);           // FINIT=1, è¿›å…¥è¿‡æ»¤å™¨åˆå§‹åŒ–
+    CH9434_AccessCANReg32(CAN_FSCFGR, 0x01, 1);          // è¿‡æ»¤å™¨0: 32ä½å®½åº¦
+    CH9434_AccessCANReg32(CAN_FMCFGR, 0x00, 1);          // è¿‡æ»¤å™¨0: æ©ç æ¨¡å¼
+    CH9434_AccessCANReg32(CAN_FAFIFOR, 0x00, 1);         // è¿‡æ»¤å™¨0: å…³è” FIFO0
+    CH9434_AccessCANReg32(CAN_F0R1, 0x00000000, 1);      // ID = 0
+    CH9434_AccessCANReg32(CAN_F0R2, 0x00000000, 1);      // Mask = 0 (æ¥æ”¶æ‰€æœ‰)
+    CH9434_AccessCANReg32(CAN_FWR, 0x01, 1);             // æ¿€æ´»è¿‡æ»¤å™¨0
+    CH9434_AccessCANReg32(CAN_FCTLR, 0x00, 1);           // FINIT=0, é€€å‡ºè¿‡æ»¤å™¨åˆå§‹åŒ–
+
+    /* 6. é€€å‡ºåˆå§‹åŒ–æ¨¡å¼ï¼Œè¿›å…¥æ­£å¸¸æ¨¡å¼ */
+    CH9434_AccessCANReg32(CAN_CTLR, 0x00000000, 1);
+
+    /* ç­‰å¾…è¿›å…¥æ­£å¸¸æ¨¡å¼ (INAK=0) */
+    timeout = 10000;
+    while(timeout--) {
+        if ((CH9434_AccessCANReg32(CAN_STATR, 0, 0) & CAN_STATR_INAK) == 0)
+            break;
+    }
 }
 
 /**
-  * @brief  ½ÓÊÕCANÏûÏ¢
-  * @param  msg: Ö¸ÏòCANÏûÏ¢½á¹¹µÄÖ¸Õë£¬ÓÃÓÚ´æ´¢½ÓÊÕµ½µÄÏûÏ¢
-  * @retval 1: ½ÓÊÕ³É¹¦, 0: ÎŞÏûÏ¢
-  */
+ * @brief  é€šè¿‡ CH9434D CAN æ§åˆ¶å™¨å‘é€ä¸€å¸§ CAN æ¶ˆæ¯
+ * @param  msg: æŒ‡å‘ CAN_Message ç»“æ„ä½“
+ * @retval 1=å‘é€æˆåŠŸ, 0=è¶…æ—¶, 2=é‚®ç®±å¿™, 3=å‘é€é”™è¯¯(æ— ACKç­‰)
+ */
+uint8_t CH9434_SendCANMessage(CAN_Message *msg)
+{
+    uint32_t tstatr;
+    uint32_t txmir, txmdtr, txmdlr, txmdhr;
+    uint16_t timeout;
+
+    /* æ£€æŸ¥å‘é€é‚®ç®± 0 æ˜¯å¦ä¸ºç©º */
+    tstatr = CH9434_AccessCANReg32(CAN_TSTATR, 0, 0);
+    if (!(tstatr & CAN_TSTATR_TME0)) {
+        return 2;  // é‚®ç®±å¿™
+    }
+
+    /* æ„é€  TXMIR (é‚®ç®±æ ‡è¯†ç¬¦å¯„å­˜å™¨) */
+    if (msg->extended) {
+        /* æ‰©å±•å¸§: ID[28:0] åœ¨ [31:3], IDE=1(bit2) */
+        txmir = (msg->id << 3) | (1UL << 2);
+    } else {
+        /* æ ‡å‡†å¸§: ID[10:0] åœ¨ [31:21], IDE=0 */
+        txmir = (msg->id << 21);
+    }
+    if (msg->rtr) {
+        txmir |= (1UL << 1);  // RTR ä½
+    }
+
+    /* æ„é€  TXMDTR (æ•°æ®é•¿åº¦) */
+    txmdtr = msg->dlc & 0x0F;
+
+    /* æ„é€ æ•°æ®å¯„å­˜å™¨ (å°ç«¯: ä½å­—èŠ‚åœ¨å‰) */
+    txmdlr = 0;
+    txmdhr = 0;
+    if (msg->dlc > 0) txmdlr |= (uint32_t)msg->data[0];
+    if (msg->dlc > 1) txmdlr |= (uint32_t)msg->data[1] << 8;
+    if (msg->dlc > 2) txmdlr |= (uint32_t)msg->data[2] << 16;
+    if (msg->dlc > 3) txmdlr |= (uint32_t)msg->data[3] << 24;
+    if (msg->dlc > 4) txmdhr |= (uint32_t)msg->data[4];
+    if (msg->dlc > 5) txmdhr |= (uint32_t)msg->data[5] << 8;
+    if (msg->dlc > 6) txmdhr |= (uint32_t)msg->data[6] << 16;
+    if (msg->dlc > 7) txmdhr |= (uint32_t)msg->data[7] << 24;
+
+    /* å…ˆå†™æ•°æ®ï¼Œå†å†™æ ‡è¯†ç¬¦è§¦å‘å‘é€ */
+    CH9434_AccessCANReg32(CAN_TXMDLR0, txmdlr, 1);
+    CH9434_AccessCANReg32(CAN_TXMDHR0, txmdhr, 1);
+    CH9434_AccessCANReg32(CAN_TXMDTR0, txmdtr, 1);
+
+    /* å†™ TXMIR å¹¶ç½® TXRQ(bit0)=1 è¯·æ±‚å‘é€ */
+    txmir |= 0x01;
+    CH9434_AccessCANReg32(CAN_TXMIR0, txmir, 1);
+
+    /* ç­‰å¾…å‘é€å®Œæˆ */
+    timeout = 5000;
+    while(timeout--) {
+        tstatr = CH9434_AccessCANReg32(CAN_TSTATR, 0, 0);
+        if (tstatr & CAN_TSTATR_RQCP0) {
+            /* æ¸…é™¤ RQCP0 */
+            CH9434_AccessCANReg32(CAN_TSTATR, CAN_TSTATR_RQCP0, 1);
+            if (tstatr & CAN_TSTATR_TXOK0) {
+                return 1;  // å‘é€æˆåŠŸ
+            } else {
+                return 3;  // å‘é€é”™è¯¯ (æ—  ACK ç­‰)
+            }
+        }
+    }
+
+    return 0;  // è¶…æ—¶
+}
+
+/**
+ * @brief  æ¥æ”¶ CH9434D CAN æ§åˆ¶å™¨çš„ä¸€å¸§æ¶ˆæ¯
+ * @param  msg: ç”¨äºå­˜å‚¨æ¥æ”¶åˆ°çš„æ¶ˆæ¯çš„ç»“æ„ä½“æŒ‡é’ˆ
+ * @retval 1=æ¥æ”¶æˆåŠŸ, 0=FIFOä¸ºç©º(æ— æ¶ˆæ¯)
+ */
 uint8_t CH9434_ReceiveCANMessage(CAN_Message *msg)
 {
-    uint8_t i;
-    
-    /* ¼ì²éÊÇ·ñÓĞÏûÏ¢ */
-    if(!CH9434_Available()) {
-        return 0;
+    uint32_t rfifo0;
+    uint32_t rxmir, rxmdtr, rxmdlr, rxmdhr;
+
+    /* 1. æ£€æŸ¥ FIFO0 ä¸­æ˜¯å¦æœ‰æŒ‚å·çš„æŠ¥æ–‡ (FMP0 ä½8ä½) */
+    rfifo0 = CH9434_AccessCANReg32(CAN_RFIFO0, 0, 0);
+    if ((rfifo0 & 0xFF) == 0) {
+        return 0;  // FIFO ä¸ºç©º
     }
-    
-    /* ¶ÁÈ¡ID */
-    uint8_t sidh = CH9434_ReadReg(CH9434_REG_RXB0SIDH);
-    uint8_t sidl = CH9434_ReadReg(CH9434_REG_RXB0SIDL);
-    
-    if(sidl & 0x08) {  // À©Õ¹Ö¡
-        msg->extended = 1;
-        uint8_t eid8 = CH9434_ReadReg(CH9434_REG_RXB0SIDH + 2);  // EID8
-        uint8_t eid0 = CH9434_ReadReg(CH9434_REG_RXB0SIDH + 3);  // EID0
-        msg->id = ((uint32_t)sidh << 21) | ((uint32_t)(sidl & 0xE0) << 13) | 
-                  ((uint32_t)(sidl & 0x03) << 16) | ((uint32_t)eid8 << 8) | eid0;
-    } else {  // ±ê×¼Ö¡
-        msg->extended = 0;
-        msg->id = ((uint32_t)sidh << 3) | (sidl >> 5);
+
+    /* 2. è¯»å–æ¥æ”¶é‚®ç®±æ•°æ® */
+    rxmir  = CH9434_AccessCANReg32(CAN_RXMIR0,  0, 0);
+    rxmdtr = CH9434_AccessCANReg32(CAN_RXMDTR0, 0, 0);
+    rxmdlr = CH9434_AccessCANReg32(CAN_RXMDLR0, 0, 0);
+    rxmdhr = CH9434_AccessCANReg32(CAN_RXMDHR0, 0, 0);
+
+    /* 3. è§£æ ID å’Œå¸§ç±»å‹ */
+    msg->extended = (rxmir & (1UL << 2)) ? 1 : 0;  // IDE ä½
+    msg->rtr      = (rxmir & (1UL << 1)) ? 1 : 0;  // RTR ä½
+
+    if (msg->extended) {
+        msg->id = rxmir >> 3;   // æ‰©å±•å¸§: 29ä½ID
+    } else {
+        msg->id = rxmir >> 21;  // æ ‡å‡†å¸§: 11ä½ID
     }
-    
-    /* ¶ÁÈ¡Êı¾İ³¤¶È */
-    msg->dlc = CH9434_ReadReg(CH9434_REG_RXB0DLC) & 0x0F;
-    
-    /* ¶ÁÈ¡Êı¾İ */
-    for(i = 0; i < msg->dlc && i < 8; i++) {
-        msg->data[i] = CH9434_ReadReg(CH9434_REG_RXB0D0 + i);
-    }
-    
-    /* Çå³ı½ÓÊÕÖĞ¶Ï±êÖ¾ */
-    CH9434_WriteReg(CH9434_REG_CANINTF, 0x00);
-    
-    return 1;  // ½ÓÊÕ³É¹¦
+
+    /* 4. è§£ææ•°æ®é•¿åº¦ */
+    msg->dlc = rxmdtr & 0x0F;
+
+    /* 5. è§£ææ•°æ® (å°ç«¯) */
+    if (msg->dlc > 0) msg->data[0] = (uint8_t)(rxmdlr & 0xFF);
+    if (msg->dlc > 1) msg->data[1] = (uint8_t)((rxmdlr >> 8)  & 0xFF);
+    if (msg->dlc > 2) msg->data[2] = (uint8_t)((rxmdlr >> 16) & 0xFF);
+    if (msg->dlc > 3) msg->data[3] = (uint8_t)((rxmdlr >> 24) & 0xFF);
+    if (msg->dlc > 4) msg->data[4] = (uint8_t)(rxmdhr & 0xFF);
+    if (msg->dlc > 5) msg->data[5] = (uint8_t)((rxmdhr >> 8)  & 0xFF);
+    if (msg->dlc > 6) msg->data[6] = (uint8_t)((rxmdhr >> 16) & 0xFF);
+    if (msg->dlc > 7) msg->data[7] = (uint8_t)((rxmdhr >> 24) & 0xFF);
+
+    /* 6. é‡Šæ”¾ FIFO0 å½“å‰é‚®ç®± (ç½®ä½ RFOM0 bit18) */
+    CH9434_AccessCANReg32(CAN_RFIFO0, (1UL << 18), 1);
+
+    return 1;  // æ¥æ”¶æˆåŠŸ
 }
+

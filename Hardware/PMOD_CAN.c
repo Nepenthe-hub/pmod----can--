@@ -29,11 +29,12 @@ uint8_t PMOD_CAN_Transmit(CanTxMsg *TxMessage)
         msg.extended = 0;
     }
     
-    /* 处理远程帧 */
+    /* 处理远程帧/数据帧 */
     if(TxMessage->RTR == CAN_RTR_Remote) {
-        msg.dlc = 0;  // 远程帧数据长度为0
-        msg.data[0] = 0xFF;  // 特殊标记表示这是远程帧
+        msg.rtr = 1;
+        msg.dlc = TxMessage->DLC;
     } else {
+        msg.rtr = 0;
         msg.dlc = TxMessage->DLC;
         for(i = 0; i < msg.dlc && i < 8; i++) {
             msg.data[i] = TxMessage->Data[i];
@@ -42,4 +43,13 @@ uint8_t PMOD_CAN_Transmit(CanTxMsg *TxMessage)
     
     /* 发送消息并返回状态 */
     return CH9434_SendCANMessage(&msg);
+}
+
+/**
+  * @brief  获取CH9434D当前工作模式
+  * @retval 0x00=正常模式, 0x80=配置模式, 0x01=睡眠模式
+  */
+uint8_t PMOD_CAN_GetMode(void)
+{
+    return CH9434_GetMode();
 }

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.wch-ic.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(cur)",
+      "Bash(curl:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:w.electrodragon.com)",
+      "WebFetch(domain:jlcpcb.com)",
+      "Bash(pip install:*)",
+      "Bash(dir:*)"
+    ]
+  }
+}

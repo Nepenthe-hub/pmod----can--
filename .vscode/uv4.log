@@ -1,7 +1,7 @@
 *** Using Compiler 'V5.06 update 5 (build 528)', folder: 'D:\keil_5\ARM\ARMCC\Bin'
 Build target 'Target 1'
-compiling main.c...
+compiling PMOD_CAN.c...
 linking...
-Program Size: Code=6588 RO-data=408 RW-data=48 ZI-data=1720  
+Program Size: Code=7636 RO-data=408 RW-data=48 ZI-data=1720  
 ".\Objects\Project.axf" - 0 Error(s), 0 Warning(s).
 Build Time Elapsed:  00:00:01
