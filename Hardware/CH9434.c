@@ -153,7 +153,12 @@ void CH9434_Init_CAN(uint32_t baudrate)
 
     /* 3. 先复位 CAN 控制器 (RST 单独写，复位后芯片进入睡眠模式) */
     CH9434_AccessCANReg32(CAN_CTLR, CAN_CTLR_RST, 1);
-    for(volatile int i=0; i<1000; i++);  // 等待复位完成
+    /* 等待 RST 由硬件清零，表示复位完成 */
+    timeout = 10000;
+    while(timeout--) {
+        if ((CH9434_AccessCANReg32(CAN_CTLR, 0, 0) & CAN_CTLR_RST) == 0)
+            break;
+    }
 
     /* 4. 退出睡眠，请求进入初始化模式 (INRQ=1, SLEEP=0) */
     CH9434_AccessCANReg32(CAN_CTLR, CAN_CTLR_INRQ, 1);
@@ -178,8 +183,8 @@ void CH9434_Init_CAN(uint32_t baudrate)
     CH9434_AccessCANReg32(CAN_FWR, 0x01, 1);             // 激活过滤器0
     CH9434_AccessCANReg32(CAN_FCTLR, 0x00, 1);           // FINIT=0, 退出过滤器初始化
 
-    /* 6. 退出初始化模式，进入正常模式 */
-    CH9434_AccessCANReg32(CAN_CTLR, 0x00000000, 1);
+    /* 6. 退出初始化模式，进入正常模式，同时启用 ABOM (bit6) 自动总线恢复 */
+    CH9434_AccessCANReg32(CAN_CTLR, (1UL << 6), 1);
 
     /* 等待进入正常模式 (INAK=0) */
     timeout = 10000;
@@ -272,8 +277,8 @@ uint8_t CH9434_ReceiveCANMessage(CAN_Message *msg)
 
     /* 1. 检查 FIFO0 中是否有挂号的报文 (FMP0 低8位) */
     rfifo0 = CH9434_AccessCANReg32(CAN_RFIFO0, 0, 0);
-    if ((rfifo0 & 0xFF) == 0) {
-        return 0;  // FIFO 为空
+    if ((rfifo0 & 0x03) == 0) {
+        return 0;  // FIFO 为空 (FMP0[1:0]=0)
     }
 
     /* 2. 读取接收邮箱数据 */
@@ -305,8 +310,8 @@ uint8_t CH9434_ReceiveCANMessage(CAN_Message *msg)
     if (msg->dlc > 6) msg->data[6] = (uint8_t)((rxmdhr >> 16) & 0xFF);
     if (msg->dlc > 7) msg->data[7] = (uint8_t)((rxmdhr >> 24) & 0xFF);
 
-    /* 6. 释放 FIFO0 当前邮箱 (置位 RFOM0 bit18) */
-    CH9434_AccessCANReg32(CAN_RFIFO0, (1UL << 18), 1);
+    /* 6. 释放 FIFO0 当前邮箱 (置位 RFOM0 bit5, WCH CAN 标准位置) */
+    CH9434_AccessCANReg32(CAN_RFIFO0, (1UL << 5), 1);
 
     return 1;  // 接收成功
 }

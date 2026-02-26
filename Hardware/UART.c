@@ -121,8 +121,7 @@ void USART1_IRQHandler(void)
         // 读取接收到的数据
         uint8_t data = USART_ReceiveData(USART1_PERIPH);
         
-        // 简单的回显（可选）
-        UART1_SendByte(data);
+        /* 回显已关初 */
         
         // 存储到缓冲区（可选）
         if(rx_index < sizeof(rx_buffer) - 1) {
