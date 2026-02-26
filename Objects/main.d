@@ -30,8 +30,8 @@
 .\objects\main.o: .\Library\misc.h
 .\objects\main.o: .\System\Delay.h
 .\objects\main.o: .\Hardware\UART.h
+.\objects\main.o: D:\keil_5\ARM\ARMCC\Bin\..\include\stdio.h
 .\objects\main.o: .\Hardware\Key.h
 .\objects\main.o: .\Hardware\MyCAN.h
 .\objects\main.o: .\Hardware\PMOD_CAN.h
 .\objects\main.o: .\Hardware\Timer.h
-.\objects\main.o: D:\keil_5\ARM\ARMCC\Bin\..\include\stdio.h

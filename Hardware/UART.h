@@ -2,6 +2,7 @@
 #define __UART_H
 
 #include "stm32f10x.h"
+#include <stdio.h>
 
 // USART1 Òý½Å¶¨Òå
 #define USART1_GPIO_PORT    GPIOA

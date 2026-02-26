@@ -1,6 +1,7 @@
 #include "stm32f10x.h"                  // Device header
 #include "UART.h"
 #include <string.h>
+#include <stdio.h>
 
 // 简单的接收缓冲区
 static uint8_t rx_buffer[64];
@@ -68,6 +69,13 @@ void UART1_SendString(char *str)
     while(*str) {
         UART1_SendByte(*str++);
     }
+}
+
+// 重定向 printf 到 UART1（Keil MicroLIB 需勾选 Use MicroLIB）
+int fputc(int ch, FILE *f)
+{
+    UART1_SendByte((uint8_t)ch);
+    return ch;
 }
 
 // 发送数据数组

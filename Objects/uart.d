@@ -29,4 +29,5 @@
 .\objects\uart.o: .\Library\stm32f10x_wwdg.h
 .\objects\uart.o: .\Library\misc.h
 .\objects\uart.o: Hardware\UART.h
+.\objects\uart.o: D:\keil_5\ARM\ARMCC\Bin\..\include\stdio.h
 .\objects\uart.o: D:\keil_5\ARM\ARMCC\Bin\..\include\string.h
