@@ -1,27 +1,48 @@
 #include "stm32f10x.h"                  // Device header
+#include "MyCAN.h"
 
 void MyCAN_Init(void)
 {
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+	GPIO_InitTypeDef GPIO_InitStructure;
+	CAN_InitTypeDef CAN_InitStructure;
+	CAN_FilterInitTypeDef CAN_FilterInitStructure;
+
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
-	// 开启 AFIO 时钟
+	
+	/* 开启 AFIO 时钟 */
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
 
-	// 重映射 CAN1 到 PB8/PB9
+	/* 先复位CAN外设，避免上电后寄存器残留导致收不到数据 */
+	CAN_DeInit(CAN1);
+
+#if (MYCAN_USE_REMAP_PB8_PB9 == 1)
+	/* 重映射 CAN1 到 PB8(RX) / PB9(TX) */
 	GPIO_PinRemapConfig(GPIO_Remap1_CAN1, ENABLE);
 
-	GPIO_InitTypeDef GPIO_InitStructure;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	
-	CAN_InitTypeDef CAN_InitStructure;
+#else
+	/* 使用默认映射 PA11(RX) / PA12(TX) */
+	GPIO_PinRemapConfig(GPIO_Remap1_CAN1, DISABLE);
+
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+#endif
+
+	CAN_StructInit(&CAN_InitStructure);
 	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal;  // 正常模式
 	CAN_InitStructure.CAN_Prescaler = 36;		// 波特率 = 36M / 36 / 8 = 125K
 	CAN_InitStructure.CAN_BS1 = CAN_BS1_5tq;    // 采样点 = (1+5)/8 = 75%
@@ -35,7 +56,6 @@ void MyCAN_Init(void)
 	CAN_InitStructure.CAN_ABOM = ENABLE;  // 启用自动总线恢复
 	CAN_Init(CAN1, &CAN_InitStructure);
 
-	CAN_FilterInitTypeDef CAN_FilterInitStructure;
 	CAN_FilterInitStructure.CAN_FilterNumber = 0;
 	CAN_FilterInitStructure.CAN_FilterIdHigh = 0x0000;
 	CAN_FilterInitStructure.CAN_FilterIdLow = 0x0000;
@@ -85,4 +105,9 @@ uint8_t MyCAN_GetErrorStatus(void)
 uint32_t MyCAN_GetLastError(void)
 {
 	return CAN1->ESR;  // 返回完整的错误状态寄存器
+}
+
+uint32_t MyCAN_GetPendingCount(void)
+{
+	return (CAN1->RF0R & 0x03);
 }

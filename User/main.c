@@ -36,6 +36,8 @@ int main(void)
 	printf("\r\n========================================\r\n");
 	printf("PMOD TX / Hardware CAN RX System\r\n");
 	printf("========================================\r\n");
+	printf("[CAN MAP] %s\r\n", MYCAN_USE_REMAP_PB8_PB9 ? "PB8/PB9" : "PA11/PA12");
+	printf("[CH9434] Ready=%d Mode=0x%02X\r\n", PMOD_CAN_IsReady(), PMOD_CAN_GetMode());
 	
 	while (1)
 	{
@@ -57,6 +59,13 @@ int main(void)
 					TxMsg_PMOD.StdId,
 					TxMsg_PMOD.Data[0], TxMsg_PMOD.Data[1],
 					TxMsg_PMOD.Data[2], TxMsg_PMOD.Data[3]);
+
+			if (txResult != 1)
+			{
+				printf("[CAN DBG] RF0R=%lu ESR=0x%08lX CH9434_ERR=0x%08lX CH9434_TSR=0x%08lX Mode=0x%02X\r\n",
+						MyCAN_GetPendingCount(), MyCAN_GetLastError(),
+						PMOD_CAN_GetErrorReg(), PMOD_CAN_GetTxStatusReg(), PMOD_CAN_GetMode());
+			}
 		}
 		
 		/* 按键触发发送（可选功能）*/
@@ -87,6 +96,16 @@ int main(void)
 						RxMsg.StdId, RxMsg.DLC,
 						RxMsg.Data[0], RxMsg.Data[1], RxMsg.Data[2], RxMsg.Data[3],
 						RxMsg.Data[4], RxMsg.Data[5], RxMsg.Data[6], RxMsg.Data[7]);
+			}
+		}
+		else if (TimingFlag == 0)
+		{
+			static uint16_t rxIdleCounter = 0;
+			rxIdleCounter++;
+			if (rxIdleCounter >= 50000)
+			{
+				rxIdleCounter = 0;
+				printf("[CAN WAIT] RF0R=%lu ESR=0x%08lX\r\n", MyCAN_GetPendingCount(), MyCAN_GetLastError());
 			}
 		}
 	}

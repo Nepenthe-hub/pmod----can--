@@ -54,6 +54,21 @@ uint8_t PMOD_CAN_GetMode(void)
     return CH9434_GetMode();
 }
 
+uint32_t PMOD_CAN_GetErrorReg(void)
+{
+    return CH9434_CAN_GetErrorReg();
+}
+
+uint32_t PMOD_CAN_GetTxStatusReg(void)
+{
+    return CH9434_CAN_GetTxStatusReg();
+}
+
+uint8_t PMOD_CAN_IsReady(void)
+{
+    return CH9434_CAN_IsInitialized();
+}
+
 /**
   * @brief  通过 PMOD 读取 CAN 接收消息
   * @param  RxMessage: 指向要存储接收到的CAN消息的结构体（STM32格式）
