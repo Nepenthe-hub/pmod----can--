@@ -1,6 +1,52 @@
 #include "CH9434.h"
 #include "SPI.h"
 
+static uint8_t g_ch9434_can_init_ok = 0;
+
+static uint32_t CH9434_ReadCANReg(uint8_t reg)
+{
+    return CH9434_AccessCANReg32(reg, 0, 0);
+}
+
+static void CH9434_WriteCANReg(uint8_t reg, uint32_t value)
+{
+    CH9434_AccessCANReg32(reg, value, 1);
+}
+
+static uint8_t CH9434_WaitRegBits(uint8_t reg, uint32_t mask, uint32_t expected, uint32_t timeout)
+{
+    while (timeout--) {
+        if ((CH9434_ReadCANReg(reg) & mask) == expected) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static uint32_t CH9434_CalcBTIMRFromBaud(uint32_t baudrate)
+{
+    uint32_t tq_total = 8;
+    uint32_t prescaler;
+
+    if (baudrate == 0) {
+        baudrate = 125000;
+    }
+
+    prescaler = 96000000UL / (baudrate * tq_total);
+    if (prescaler == 0) {
+        prescaler = 1;
+    }
+    if (prescaler > 1024) {
+        prescaler = 1024;
+    }
+
+    return ((uint32_t)CH9434_CAN_MODE_NORMAL << 30) |
+           (0UL << 24) |
+           (1UL << 20) |
+           (4UL << 16) |
+           (prescaler - 1);
+}
+
 /**
  * @brief  CH9434D 通过 SPI 写 8 位寄存器
  */
@@ -8,18 +54,14 @@ void CH9434_Write8(uint8_t addr, uint8_t val)
 {
     SPI_CS_LOW();
     BSP_SPI_SwapByte(addr | CH9434_SPI_WRITE_BIT);
-    for(volatile int d=0; d<30; d++);  // >2us @72MHz
+    for (volatile int d = 0; d < 30; d++);
     BSP_SPI_SwapByte(val);
     SPI_CS_HIGH();
-    for(volatile int d=0; d<30; d++);  // >2us @72MHz
+    for (volatile int d = 0; d < 30; d++);
 }
 
 /**
  * @brief  CH9434D 读/写 32位 CAN 寄存器
- * @param  can_reg_addr: CAN 内部寄存器地址
- * @param  write_val: 要写入的 32 位值
- * @param  is_write: 1 为写操作，0 为读操作
- * @retval 读操作时返回 32 位寄存器值；写操作时返回 0
  */
 uint32_t CH9434_AccessCANReg32(uint8_t can_reg_addr, uint32_t write_val, uint8_t is_write)
 {
@@ -27,12 +69,12 @@ uint32_t CH9434_AccessCANReg32(uint8_t can_reg_addr, uint32_t write_val, uint8_t
 
     SPI_CS_LOW();
     if (is_write) {
-        BSP_SPI_SwapByte(CH9434_REG_CAN | CH9434_SPI_WRITE_BIT); // 0xC6
+        BSP_SPI_SwapByte(CH9434_REG_CAN | CH9434_SPI_WRITE_BIT);
     } else {
-        BSP_SPI_SwapByte(CH9434_REG_CAN);                        // 0x46
+        BSP_SPI_SwapByte(CH9434_REG_CAN);
     }
 
-    for(volatile int d=0; d<30; d++);  // >2us @72MHz
+    for (volatile int d = 0; d < 30; d++);
 
     BSP_SPI_SwapByte(can_reg_addr);
 
@@ -49,270 +91,432 @@ uint32_t CH9434_AccessCANReg32(uint8_t can_reg_addr, uint32_t write_val, uint8_t
     }
 
     SPI_CS_HIGH();
-    for(volatile int d=0; d<20; d++);
+    for (volatile int d = 0; d < 20; d++);
 
     return read_val;
 }
 
 /**
- * @brief  启用 CH9434D 的默认引脚功能
- * @param  pin_addr: 默认引脚地址 (例如 CAN_TX_RX 为 6)
+ * @brief  启用 CH9434D 默认功能引脚
  */
 void CH9434_EnableDefaultPin(uint8_t pin_addr)
 {
     uint8_t status = 0;
+    uint16_t timeout;
 
-    /* 发送开启命令 */
     SPI_CS_LOW();
-    BSP_SPI_SwapByte(CH9434_REG_IO_SEL_FUN | CH9434_SPI_WRITE_BIT); // 0xC5
-    for(volatile int d=0; d<10; d++);
-    BSP_SPI_SwapByte(0x03);      // 子命令：0x03 开启默认引脚使能
-    BSP_SPI_SwapByte(pin_addr);  // 默认引脚地址
-    BSP_SPI_SwapByte(0x01);      // 1: 使能
-    BSP_SPI_SwapByte(0xA5);      // 标志位写入 0xA5
+    BSP_SPI_SwapByte(CH9434_REG_IO_SEL_FUN | CH9434_SPI_WRITE_BIT);
+    for (volatile int d = 0; d < 10; d++);
+    BSP_SPI_SwapByte(CH9434_IO_DEF_W_EN);
+    BSP_SPI_SwapByte(pin_addr);
+    BSP_SPI_SwapByte(0x01);
+    BSP_SPI_SwapByte(CH9434_IO_CMD_ACT);
     SPI_CS_HIGH();
 
-    for(volatile int d=0; d<20; d++);
+    for (volatile int d = 0; d < 20; d++);
 
-    /* 轮询等待芯片应答 0x5A */
-    uint16_t timeout = 1000;
-    while(timeout--) {
+    timeout = 2000;
+    while (timeout--) {
         SPI_CS_LOW();
-        BSP_SPI_SwapByte(CH9434_REG_IO_SEL_FUN); // 读操作 0x45
-        for(volatile int d=0; d<10; d++);
+        BSP_SPI_SwapByte(CH9434_REG_IO_SEL_FUN);
+        for (volatile int d = 0; d < 10; d++);
         BSP_SPI_SwapByte(0xFF);
         BSP_SPI_SwapByte(0xFF);
         status = BSP_SPI_SwapByte(0xFF);
         SPI_CS_HIGH();
 
-        if(status == 0x5A) break;
-        for(volatile int d=0; d<20; d++);
+        if (status == CH9434_IO_CMD_COMP) {
+            break;
+        }
+        for (volatile int d = 0; d < 20; d++);
     }
+}
+
+void CH9434_CAN_StructInit(CH9434_CAN_InitTypeDef *init)
+{
+    if (init == 0) {
+        return;
+    }
+
+    init->ttcm = 0;
+    init->abom = 1;
+    init->awum = 0;
+    init->nart = 0;
+    init->rflm = 0;
+    init->txfp = 0;
+    init->mode = CH9434_CAN_MODE_NORMAL;
+    init->sjw = 0;
+    init->bs1 = 4;
+    init->bs2 = 1;
+    init->prescaler = 96;
+}
+
+uint8_t CH9434_CAN_Init(const CH9434_CAN_InitTypeDef *init)
+{
+    CH9434_CAN_InitTypeDef local;
+    uint32_t ctlr;
+    uint32_t btimr;
+
+    if (init == 0) {
+        CH9434_CAN_StructInit(&local);
+        init = &local;
+    }
+
+    BSP_SPI_Init();
+    for (volatile int i = 0; i < 10000; i++);
+
+    CH9434_EnableDefaultPin(CH9434_PIN_CAN);
+
+    CH9434_WriteCANReg(CAN_CTLR, CAN_CTLR_RST);
+    CH9434_WaitRegBits(CAN_CTLR, CAN_CTLR_RST, 0, 100000);
+
+    ctlr = CH9434_ReadCANReg(CAN_CTLR);
+    ctlr &= ~CAN_CTLR_SLEEP;
+    CH9434_WriteCANReg(CAN_CTLR, ctlr);
+
+    ctlr = CH9434_ReadCANReg(CAN_CTLR);
+    ctlr |= CAN_CTLR_INRQ;
+    CH9434_WriteCANReg(CAN_CTLR, ctlr);
+
+    if (!CH9434_WaitRegBits(CAN_STATR, CAN_STATR_INAK, CAN_STATR_INAK, 100000)) {
+        g_ch9434_can_init_ok = 0;
+        return 0;
+    }
+
+    ctlr = CH9434_ReadCANReg(CAN_CTLR);
+    ctlr &= ~(CAN_CTLR_TTCM | CAN_CTLR_ABOM | CAN_CTLR_AWUM | CAN_CTLR_NART | CAN_CTLR_RFLM | CAN_CTLR_TXFP);
+
+    if (init->ttcm) ctlr |= CAN_CTLR_TTCM;
+    if (init->abom) ctlr |= CAN_CTLR_ABOM;
+    if (init->awum) ctlr |= CAN_CTLR_AWUM;
+    if (init->nart) ctlr |= CAN_CTLR_NART;
+    if (init->rflm) ctlr |= CAN_CTLR_RFLM;
+    if (init->txfp) ctlr |= CAN_CTLR_TXFP;
+
+    CH9434_WriteCANReg(CAN_CTLR, ctlr);
+
+    btimr = ((uint32_t)(init->mode & 0x03) << 30) |
+            ((uint32_t)(init->sjw & 0x03) << 24) |
+            ((uint32_t)(init->bs2 & 0x07) << 20) |
+            ((uint32_t)(init->bs1 & 0x0F) << 16) |
+            ((uint32_t)((init->prescaler > 0) ? (init->prescaler - 1) : 0) & 0x3FF);
+
+    CH9434_WriteCANReg(CAN_BTIMR, btimr);
+
+    ctlr = CH9434_ReadCANReg(CAN_CTLR);
+    ctlr &= ~CAN_CTLR_INRQ;
+    CH9434_WriteCANReg(CAN_CTLR, ctlr);
+
+    if (!CH9434_WaitRegBits(CAN_STATR, CAN_STATR_INAK, 0, 100000)) {
+        g_ch9434_can_init_ok = 0;
+        return 0;
+    }
+
+    g_ch9434_can_init_ok = 1;
+    return 1;
+}
+
+void CH9434_CAN_FilterAcceptAll(void)
+{
+    uint32_t reg;
+
+    reg = CH9434_ReadCANReg(CAN_FCTLR);
+    reg |= CAN_FCTLR_FINIT;
+    CH9434_WriteCANReg(CAN_FCTLR, reg);
+
+    reg = CH9434_ReadCANReg(CAN_FWR);
+    reg &= ~(1UL << 0);
+    CH9434_WriteCANReg(CAN_FWR, reg);
+
+    reg = CH9434_ReadCANReg(CAN_FSCFGR);
+    reg |= (1UL << 0);
+    CH9434_WriteCANReg(CAN_FSCFGR, reg);
+
+    reg = CH9434_ReadCANReg(CAN_FMCFGR);
+    reg &= ~(1UL << 0);
+    CH9434_WriteCANReg(CAN_FMCFGR, reg);
+
+    reg = CH9434_ReadCANReg(CAN_FAFIFOR);
+    reg &= ~(1UL << 0);
+    CH9434_WriteCANReg(CAN_FAFIFOR, reg);
+
+    CH9434_WriteCANReg(CAN_F0R1, 0x00000000);
+    CH9434_WriteCANReg(CAN_F0R2, 0x00000000);
+
+    reg = CH9434_ReadCANReg(CAN_FWR);
+    reg |= (1UL << 0);
+    CH9434_WriteCANReg(CAN_FWR, reg);
+
+    reg = CH9434_ReadCANReg(CAN_FCTLR);
+    reg &= ~CAN_FCTLR_FINIT;
+    CH9434_WriteCANReg(CAN_FCTLR, reg);
+}
+
+uint8_t CH9434_CAN_Transmit(const CAN_Message *msg)
+{
+    uint32_t tsr;
+    uint32_t mir;
+    uint32_t mdtr;
+    uint32_t mdlr;
+    uint32_t mdhr;
+    uint8_t mailbox;
+    uint8_t dlc;
+    uint16_t timeout;
+    uint32_t rqcp_bit[3] = {CAN_TSTATR_RQCP0, CAN_TSTATR_RQCP1, CAN_TSTATR_RQCP2};
+    uint32_t txok_bit[3] = {CAN_TSTATR_TXOK0, CAN_TSTATR_TXOK1, CAN_TSTATR_TXOK2};
+
+    if ((msg == 0) || (!g_ch9434_can_init_ok)) {
+        return 0;
+    }
+
+    tsr = CH9434_ReadCANReg(CAN_TSTATR);
+
+    if (tsr & CAN_TSTATR_TME0) {
+        mailbox = 0;
+    } else if (tsr & CAN_TSTATR_TME1) {
+        mailbox = 1;
+    } else if (tsr & CAN_TSTATR_TME2) {
+        mailbox = 2;
+    } else {
+        return 2;
+    }
+
+    dlc = msg->dlc;
+    if (dlc > 8) {
+        dlc = 8;
+    }
+
+    mir = 0;
+    if (msg->extended) {
+        mir |= ((msg->id & 0x1FFFFFFFUL) << 3);
+        mir |= CAN_TXMIRx_IDE;
+    } else {
+        mir |= ((msg->id & 0x7FFUL) << 21);
+    }
+    if (msg->rtr) {
+        mir |= CAN_TXMIRx_RTR;
+    }
+
+    mdtr = (uint32_t)(dlc & 0x0F);
+
+    mdlr = ((uint32_t)msg->data[0]) |
+           ((uint32_t)msg->data[1] << 8) |
+           ((uint32_t)msg->data[2] << 16) |
+           ((uint32_t)msg->data[3] << 24);
+
+    mdhr = ((uint32_t)msg->data[4]) |
+           ((uint32_t)msg->data[5] << 8) |
+           ((uint32_t)msg->data[6] << 16) |
+           ((uint32_t)msg->data[7] << 24);
+
+    CH9434_WriteCANReg((uint8_t)(CAN_TXMIR0 + mailbox * 4), mir);
+    CH9434_WriteCANReg((uint8_t)(CAN_TXMDTR0 + mailbox * 4), mdtr);
+    CH9434_WriteCANReg((uint8_t)(CAN_TXMDLR0 + mailbox * 4), mdlr);
+    CH9434_WriteCANReg((uint8_t)(CAN_TXMDHR0 + mailbox * 4), mdhr);
+
+    CH9434_WriteCANReg((uint8_t)(CAN_TXMIR0 + mailbox * 4), mir | CAN_TXMIRx_TXRQ);
+
+    timeout = 30000;
+    while (timeout--) {
+        tsr = CH9434_ReadCANReg(CAN_TSTATR);
+        if (tsr & rqcp_bit[mailbox]) {
+            CH9434_WriteCANReg(CAN_TSTATR, rqcp_bit[mailbox]);
+            if (tsr & txok_bit[mailbox]) {
+                return 1;
+            }
+            return 3;
+        }
+    }
+
+    return 0;
+}
+
+uint8_t CH9434_CAN_TransmitStatus(uint8_t mailbox)
+{
+    uint32_t tsr = CH9434_ReadCANReg(CAN_TSTATR);
+
+    switch (mailbox) {
+    case 0:
+        if ((tsr & (CAN_TSTATR_RQCP0 | CAN_TSTATR_TXOK0 | CAN_TSTATR_TME0)) == (CAN_TSTATR_RQCP0 | CAN_TSTATR_TXOK0 | CAN_TSTATR_TME0)) {
+            return CH9434_CAN_TX_OK;
+        }
+        if (tsr & CAN_TSTATR_RQCP0) {
+            return CH9434_CAN_TX_FAILED;
+        }
+        break;
+
+    case 1:
+        if ((tsr & (CAN_TSTATR_RQCP1 | CAN_TSTATR_TXOK1 | CAN_TSTATR_TME1)) == (CAN_TSTATR_RQCP1 | CAN_TSTATR_TXOK1 | CAN_TSTATR_TME1)) {
+            return CH9434_CAN_TX_OK;
+        }
+        if (tsr & CAN_TSTATR_RQCP1) {
+            return CH9434_CAN_TX_FAILED;
+        }
+        break;
+
+    case 2:
+        if ((tsr & (CAN_TSTATR_RQCP2 | CAN_TSTATR_TXOK2 | CAN_TSTATR_TME2)) == (CAN_TSTATR_RQCP2 | CAN_TSTATR_TXOK2 | CAN_TSTATR_TME2)) {
+            return CH9434_CAN_TX_OK;
+        }
+        if (tsr & CAN_TSTATR_RQCP2) {
+            return CH9434_CAN_TX_FAILED;
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    return CH9434_CAN_TX_PENDING;
+}
+
+uint8_t CH9434_CAN_MessagePending(uint8_t fifo)
+{
+    if (fifo > 1) {
+        fifo = 0;
+    }
+    return (uint8_t)(CH9434_ReadCANReg((uint8_t)(CAN_RFIFO0 + fifo)) & CAN_RFIFOx_FMPx);
+}
+
+void CH9434_CAN_FIFORelease(uint8_t fifo)
+{
+    uint32_t rfifo;
+
+    if (fifo > 1) {
+        fifo = 0;
+    }
+
+    rfifo = CH9434_ReadCANReg((uint8_t)(CAN_RFIFO0 + fifo));
+    rfifo |= CAN_RFIFOx_RFOMx;
+    CH9434_WriteCANReg((uint8_t)(CAN_RFIFO0 + fifo), rfifo);
+}
+
+uint8_t CH9434_CAN_Receive(CAN_Message *msg, uint8_t fifo)
+{
+    uint32_t rxmir;
+    uint32_t rxmdtr;
+    uint32_t rxmdlr;
+    uint32_t rxmdhr;
+
+    if ((msg == 0) || (!g_ch9434_can_init_ok)) {
+        return 0;
+    }
+
+    if (fifo > 1) {
+        fifo = 0;
+    }
+
+    if (CH9434_CAN_MessagePending(fifo) == 0) {
+        return 0;
+    }
+
+    rxmir  = CH9434_ReadCANReg((uint8_t)(CAN_RXMIR0 + fifo * 4));
+    rxmdtr = CH9434_ReadCANReg((uint8_t)(CAN_RXMDTR0 + fifo * 4));
+    rxmdlr = CH9434_ReadCANReg((uint8_t)(CAN_RXMDLR0 + fifo * 4));
+    rxmdhr = CH9434_ReadCANReg((uint8_t)(CAN_RXMDHR0 + fifo * 4));
+
+    msg->extended = (rxmir & CAN_TXMIRx_IDE) ? 1 : 0;
+    msg->rtr = (rxmir & CAN_TXMIRx_RTR) ? 1 : 0;
+
+    if (msg->extended) {
+        msg->id = (rxmir >> 3) & 0x1FFFFFFF;
+    } else {
+        msg->id = (rxmir >> 21) & 0x7FF;
+    }
+
+    msg->dlc = (uint8_t)(rxmdtr & 0x0F);
+    if (msg->dlc > 8) {
+        msg->dlc = 8;
+    }
+
+    msg->data[0] = (uint8_t)(rxmdlr & 0xFF);
+    msg->data[1] = (uint8_t)((rxmdlr >> 8) & 0xFF);
+    msg->data[2] = (uint8_t)((rxmdlr >> 16) & 0xFF);
+    msg->data[3] = (uint8_t)((rxmdlr >> 24) & 0xFF);
+    msg->data[4] = (uint8_t)(rxmdhr & 0xFF);
+    msg->data[5] = (uint8_t)((rxmdhr >> 8) & 0xFF);
+    msg->data[6] = (uint8_t)((rxmdhr >> 16) & 0xFF);
+    msg->data[7] = (uint8_t)((rxmdhr >> 24) & 0xFF);
+
+    CH9434_CAN_FIFORelease(fifo);
+    return 1;
+}
+
+uint8_t CH9434_CAN_IsInitialized(void)
+{
+    return g_ch9434_can_init_ok;
+}
+
+uint32_t CH9434_CAN_GetErrorReg(void)
+{
+    return CH9434_ReadCANReg(CAN_ERRSR);
+}
+
+uint32_t CH9434_CAN_GetTxStatusReg(void)
+{
+    return CH9434_ReadCANReg(CAN_TSTATR);
 }
 
 /**
  * @brief  读取 CAN 控制器当前工作模式
- * @retval 0x00=正常模式, 0x80=初始化/配置模式, 0x01=睡眠模式
  */
 uint8_t CH9434_GetMode(void)
 {
-    uint32_t statr = CH9434_AccessCANReg32(CAN_STATR, 0, 0);
+    uint32_t statr = CH9434_ReadCANReg(CAN_STATR);
 
-    if (statr & CAN_STATR_SLAK)
-        return 0x01;  // 睡眠模式
-    if (statr & CAN_STATR_INAK)
-        return 0x80;  // 初始化/配置模式
-    return 0x00;      // 正常模式
+    if (statr & CAN_STATR_SLAK) {
+        return 0x01;
+    }
+    if (statr & CAN_STATR_INAK) {
+        return 0x80;
+    }
+    return 0x00;
 }
 
 /**
- * @brief  读取 CAN 内部寄存器 (返回低 8 位)
- * @param  can_reg_addr: CAN 内部寄存器地址
- * @retval 寄存器值的低 8 位
+ * @brief  读取 CAN 内部寄存器低 8 位
  */
 uint8_t CH9434_ReadReg(uint8_t can_reg_addr)
 {
-    return (uint8_t)(CH9434_AccessCANReg32(can_reg_addr, 0, 0) & 0xFF);
+    return (uint8_t)(CH9434_ReadCANReg(can_reg_addr) & 0xFF);
 }
 
 /**
- * @brief  根据波特率计算 CAN_BTIMR 寄存器值
- *         CH9434D 内部 CAN 时钟 = 96MHz
- *         采用 8 个时间量子: 1(SYNC) + 5(TS1) + 2(TS2) = 8tq
- *         采样点 = (1+5)/8 = 75%
- * @param  baudrate: 目标波特率 (如 125000, 250000, 500000, 1000000)
- * @retval BTIMR 寄存器值
- */
-static uint32_t CH9434_CalcBTIMR(uint32_t baudrate)
-{
-    uint32_t brp;
-    uint32_t total_tq = 8;  // 1 + 5 + 2
-
-    /* BRP = (96MHz / baudrate / total_tq) - 1 */
-    brp = (96000000UL / baudrate / total_tq) - 1;
-    if (brp > 1023) brp = 1023;
-
-    /* BTIMR: [25:24]=SJW(0), [22:20]=TS2(1), [19:16]=TS1(4), [9:0]=BRP */
-    return (0UL << 24) | (1UL << 20) | (4UL << 16) | brp;
-}
-
-/**
- * @brief  初始化 CH9434D 的 CAN 控制器
- * @param  baudrate: CAN 波特率 (如 125000 表示 125kbps)
+ * @brief  兼容旧接口：按波特率初始化 CH9434 CAN
  */
 void CH9434_Init_CAN(uint32_t baudrate)
 {
-    uint16_t timeout;
+    CH9434_CAN_InitTypeDef init;
 
-    /* 1. 初始化底层 SPI */
-    BSP_SPI_Init();
-    for(volatile int i=0; i<10000; i++);
+    CH9434_CAN_StructInit(&init);
 
-    /* 2. 启用 CAN 引脚复用功能 */
-    CH9434_EnableDefaultPin(CH9434_PIN_CAN);
-
-    /* 3. 先复位 CAN 控制器 (RST 单独写，复位后芯片进入睡眠模式) */
-    CH9434_AccessCANReg32(CAN_CTLR, CAN_CTLR_RST, 1);
-    /* 等待 RST 由硬件清零，表示复位完成 */
-    timeout = 10000;
-    while(timeout--) {
-        if ((CH9434_AccessCANReg32(CAN_CTLR, 0, 0) & CAN_CTLR_RST) == 0)
-            break;
+    if (baudrate != 0) {
+        uint32_t btimr = CH9434_CalcBTIMRFromBaud(baudrate);
+        init.mode = (uint8_t)((btimr >> 30) & 0x03);
+        init.sjw = (uint8_t)((btimr >> 24) & 0x03);
+        init.bs2 = (uint8_t)((btimr >> 20) & 0x07);
+        init.bs1 = (uint8_t)((btimr >> 16) & 0x0F);
+        init.prescaler = (uint16_t)((btimr & 0x3FF) + 1);
     }
 
-    /* 4. 退出睡眠，请求进入初始化模式 (INRQ=1, SLEEP=0) */
-    CH9434_AccessCANReg32(CAN_CTLR, CAN_CTLR_INRQ, 1);
-
-    /* 等待进入初始化模式 (INAK=1) */
-    timeout = 10000;
-    while(timeout--) {
-        if (CH9434_AccessCANReg32(CAN_STATR, 0, 0) & CAN_STATR_INAK)
-            break;
-    }
-
-    /* 4. 配置波特率 */
-    CH9434_AccessCANReg32(CAN_BTIMR, CH9434_CalcBTIMR(baudrate), 1);
-
-    /* 5. 配置过滤器 —— 接收所有消息 */
-    CH9434_AccessCANReg32(CAN_FCTLR, 0x01, 1);           // FINIT=1, 进入过滤器初始化
-    CH9434_AccessCANReg32(CAN_FSCFGR, 0x01, 1);          // 过滤器0: 32位宽度
-    CH9434_AccessCANReg32(CAN_FMCFGR, 0x00, 1);          // 过滤器0: 掩码模式
-    CH9434_AccessCANReg32(CAN_FAFIFOR, 0x00, 1);         // 过滤器0: 关联 FIFO0
-    CH9434_AccessCANReg32(CAN_F0R1, 0x00000000, 1);      // ID = 0
-    CH9434_AccessCANReg32(CAN_F0R2, 0x00000000, 1);      // Mask = 0 (接收所有)
-    CH9434_AccessCANReg32(CAN_FWR, 0x01, 1);             // 激活过滤器0
-    CH9434_AccessCANReg32(CAN_FCTLR, 0x00, 1);           // FINIT=0, 退出过滤器初始化
-
-    /* 6. 退出初始化模式，进入正常模式，同时启用 ABOM (bit6) 自动总线恢复 */
-    CH9434_AccessCANReg32(CAN_CTLR, (1UL << 6), 1);
-
-    /* 等待进入正常模式 (INAK=0) */
-    timeout = 10000;
-    while(timeout--) {
-        if ((CH9434_AccessCANReg32(CAN_STATR, 0, 0) & CAN_STATR_INAK) == 0)
-            break;
+    if (CH9434_CAN_Init(&init)) {
+        CH9434_CAN_FilterAcceptAll();
     }
 }
 
 /**
- * @brief  通过 CH9434D CAN 控制器发送一帧 CAN 消息
- * @param  msg: 指向 CAN_Message 结构体
- * @retval 1=发送成功, 0=超时, 2=邮箱忙, 3=发送错误(无ACK等)
+ * @brief  兼容旧接口：发送一帧消息
+ * @retval 1=成功, 0=超时/未初始化, 2=邮箱忙, 3=发送错误
  */
 uint8_t CH9434_SendCANMessage(CAN_Message *msg)
 {
-    uint32_t tstatr;
-    uint32_t txmir, txmdtr, txmdlr, txmdhr;
-    uint16_t timeout;
-
-    /* 检查发送邮箱 0 是否为空 */
-    tstatr = CH9434_AccessCANReg32(CAN_TSTATR, 0, 0);
-    if (!(tstatr & CAN_TSTATR_TME0)) {
-        return 2;  // 邮箱忙
-    }
-
-    /* 构造 TXMIR (邮箱标识符寄存器) */
-    if (msg->extended) {
-        /* 扩展帧: ID[28:0] 在 [31:3], IDE=1(bit2) */
-        txmir = (msg->id << 3) | (1UL << 2);
-    } else {
-        /* 标准帧: ID[10:0] 在 [31:21], IDE=0 */
-        txmir = (msg->id << 21);
-    }
-    if (msg->rtr) {
-        txmir |= (1UL << 1);  // RTR 位
-    }
-
-    /* 构造 TXMDTR (数据长度) */
-    txmdtr = msg->dlc & 0x0F;
-
-    /* 构造数据寄存器 (小端: 低字节在前) */
-    txmdlr = 0;
-    txmdhr = 0;
-    if (msg->dlc > 0) txmdlr |= (uint32_t)msg->data[0];
-    if (msg->dlc > 1) txmdlr |= (uint32_t)msg->data[1] << 8;
-    if (msg->dlc > 2) txmdlr |= (uint32_t)msg->data[2] << 16;
-    if (msg->dlc > 3) txmdlr |= (uint32_t)msg->data[3] << 24;
-    if (msg->dlc > 4) txmdhr |= (uint32_t)msg->data[4];
-    if (msg->dlc > 5) txmdhr |= (uint32_t)msg->data[5] << 8;
-    if (msg->dlc > 6) txmdhr |= (uint32_t)msg->data[6] << 16;
-    if (msg->dlc > 7) txmdhr |= (uint32_t)msg->data[7] << 24;
-
-    /* 先写数据，再写标识符触发发送 */
-    CH9434_AccessCANReg32(CAN_TXMDLR0, txmdlr, 1);
-    CH9434_AccessCANReg32(CAN_TXMDHR0, txmdhr, 1);
-    CH9434_AccessCANReg32(CAN_TXMDTR0, txmdtr, 1);
-
-    /* 写 TXMIR 并置 TXRQ(bit0)=1 请求发送 */
-    txmir |= 0x01;
-    CH9434_AccessCANReg32(CAN_TXMIR0, txmir, 1);
-
-    /* 等待发送完成 */
-    timeout = 5000;
-    while(timeout--) {
-        tstatr = CH9434_AccessCANReg32(CAN_TSTATR, 0, 0);
-        if (tstatr & CAN_TSTATR_RQCP0) {
-            /* 清除 RQCP0 */
-            CH9434_AccessCANReg32(CAN_TSTATR, CAN_TSTATR_RQCP0, 1);
-            if (tstatr & CAN_TSTATR_TXOK0) {
-                return 1;  // 发送成功
-            } else {
-                return 3;  // 发送错误 (无 ACK 等)
-            }
-        }
-    }
-
-    return 0;  // 超时
+    return CH9434_CAN_Transmit(msg);
 }
 
 /**
- * @brief  接收 CH9434D CAN 控制器的一帧消息
- * @param  msg: 用于存储接收到的消息的结构体指针
- * @retval 1=接收成功, 0=FIFO为空(无消息)
+ * @brief  兼容旧接口：从 FIFO0 接收一帧消息
  */
 uint8_t CH9434_ReceiveCANMessage(CAN_Message *msg)
 {
-    uint32_t rfifo0;
-    uint32_t rxmir, rxmdtr, rxmdlr, rxmdhr;
-
-    /* 1. 检查 FIFO0 中是否有挂号的报文 (FMP0 低8位) */
-    rfifo0 = CH9434_AccessCANReg32(CAN_RFIFO0, 0, 0);
-    if ((rfifo0 & 0x03) == 0) {
-        return 0;  // FIFO 为空 (FMP0[1:0]=0)
-    }
-
-    /* 2. 读取接收邮箱数据 */
-    rxmir  = CH9434_AccessCANReg32(CAN_RXMIR0,  0, 0);
-    rxmdtr = CH9434_AccessCANReg32(CAN_RXMDTR0, 0, 0);
-    rxmdlr = CH9434_AccessCANReg32(CAN_RXMDLR0, 0, 0);
-    rxmdhr = CH9434_AccessCANReg32(CAN_RXMDHR0, 0, 0);
-
-    /* 3. 解析 ID 和帧类型 */
-    msg->extended = (rxmir & (1UL << 2)) ? 1 : 0;  // IDE 位
-    msg->rtr      = (rxmir & (1UL << 1)) ? 1 : 0;  // RTR 位
-
-    if (msg->extended) {
-        msg->id = rxmir >> 3;   // 扩展帧: 29位ID
-    } else {
-        msg->id = rxmir >> 21;  // 标准帧: 11位ID
-    }
-
-    /* 4. 解析数据长度 */
-    msg->dlc = rxmdtr & 0x0F;
-
-    /* 5. 解析数据 (小端) */
-    if (msg->dlc > 0) msg->data[0] = (uint8_t)(rxmdlr & 0xFF);
-    if (msg->dlc > 1) msg->data[1] = (uint8_t)((rxmdlr >> 8)  & 0xFF);
-    if (msg->dlc > 2) msg->data[2] = (uint8_t)((rxmdlr >> 16) & 0xFF);
-    if (msg->dlc > 3) msg->data[3] = (uint8_t)((rxmdlr >> 24) & 0xFF);
-    if (msg->dlc > 4) msg->data[4] = (uint8_t)(rxmdhr & 0xFF);
-    if (msg->dlc > 5) msg->data[5] = (uint8_t)((rxmdhr >> 8)  & 0xFF);
-    if (msg->dlc > 6) msg->data[6] = (uint8_t)((rxmdhr >> 16) & 0xFF);
-    if (msg->dlc > 7) msg->data[7] = (uint8_t)((rxmdhr >> 24) & 0xFF);
-
-    /* 6. 释放 FIFO0 当前邮箱 (置位 RFOM0 bit5, WCH CAN 标准位置) */
-    CH9434_AccessCANReg32(CAN_RFIFO0, (1UL << 5), 1);
-
-    return 1;  // 接收成功
+    return CH9434_CAN_Receive(msg, 0);
 }
-
