@@ -4,7 +4,7 @@
 #include "stm32f10x.h"
 
 /* 硬件引脚定义 — 根据原理图 PMOD 接口 (P4→P5) */
-/* SCK=PB13, MISO=PB14, MOSI=PB15, CS=PB3(DB3, 需要禁用JTAG重映射) */
+/* SCK=PB13, MISO=PB14, MOSI=PB15, CS=PB3(JTDO, 需禁用JTAG保留SWD) */
 /* 注: PB4=INT(DB4), PB5=RST(DB5) */
 #define SPI_PORT            GPIOB
 #define SPI_PIN_SCK         GPIO_Pin_13

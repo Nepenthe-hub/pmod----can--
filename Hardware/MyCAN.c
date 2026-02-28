@@ -43,7 +43,7 @@ void MyCAN_Init(void)
 #endif
 
 	CAN_StructInit(&CAN_InitStructure);
-	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal;  // 正常模式
+	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal;  /* 正常模式 (确认非 Loopback) */
 	CAN_InitStructure.CAN_Prescaler = 36;		// 波特率 = 36M / 36 / 8 = 125K
 	CAN_InitStructure.CAN_BS1 = CAN_BS1_5tq;    // 采样点 = (1+5)/8 = 75%
 	CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq;

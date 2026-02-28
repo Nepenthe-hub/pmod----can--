@@ -20,8 +20,9 @@ void BSP_SPI_Init(void)
   /* 1. 开启 GPIOB + AFIO 时钟 */
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO, ENABLE);
 
-  /* 2. PB3 是 JTAG 的 JTDO/TRACESWO，必须禁用 JTAG 才能当普通 GPIO
-   *    SWJ_JTAGDisable: 关闭 JTAG 但保留 SWD（PA13/PA14），释放 PB3/PB4/PA15 */
+  /* 2. PB3 是 JTAG 的 JTDO，必须禁用 JTAG 才能当普通 GPIO
+   *    SWJ_JTAGDisable: 关闭 JTAG 但保留 SWD (PA13/PA14)，释放 PB3/PB4/PA15
+   *    重要: 请确保下载器使用 SWD 模式而非 JTAG 模式 */
   GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);
 
   /* 3. 配置 SCK(PB13) 和 MOSI(PB15) 为推挽输出 */
