@@ -701,6 +701,11 @@
               <FilePath>.\Hardware\CH9434.h</FilePath>
             </File>
             <File>
+              <FileName>CH9434_Port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\CH9434_Port.c</FilePath>
+            </File>
+            <File>
               <FileName>SPI.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Hardware\SPI.c</FilePath>

@@ -3,6 +3,29 @@
 #include <string.h>
 #include <stdio.h>
 
+#if defined(__CC_ARM)
+/* 关闭半主机，避免 printf 依赖调试器 */
+#pragma import(__use_no_semihosting)
+
+struct __FILE {
+    int handle;
+};
+
+FILE __stdout;
+FILE __stdin;
+
+void _sys_exit(int x)
+{
+    (void)x;
+    while (1);
+}
+
+void _ttywrch(int ch)
+{
+    UART1_SendByte((uint8_t)ch);
+}
+#endif
+
 // 简单的接收缓冲区
 static uint8_t rx_buffer[64];
 static volatile uint8_t rx_index = 0;
@@ -71,9 +94,10 @@ void UART1_SendString(char *str)
     }
 }
 
-// 重定向 printf 到 UART1（Keil MicroLIB 需勾选 Use MicroLIB）
+// 重定向 printf 到 UART1
 int fputc(int ch, FILE *f)
 {
+    (void)f;
     UART1_SendByte((uint8_t)ch);
     return ch;
 }

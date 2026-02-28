@@ -28,3 +28,4 @@
 .\objects\mycan.o: .\Library\stm32f10x_usart.h
 .\objects\mycan.o: .\Library\stm32f10x_wwdg.h
 .\objects\mycan.o: .\Library\misc.h
+.\objects\mycan.o: Hardware\MyCAN.h

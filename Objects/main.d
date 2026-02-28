@@ -35,3 +35,4 @@
 .\objects\main.o: .\Hardware\MyCAN.h
 .\objects\main.o: .\Hardware\PMOD_CAN.h
 .\objects\main.o: .\Hardware\Timer.h
+.\objects\main.o: .\Hardware\SPI.h

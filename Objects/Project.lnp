@@ -29,6 +29,7 @@
 ".\objects\main.o"
 ".\objects\stm32f10x_it.o"
 ".\objects\ch9434.o"
+".\objects\ch9434_port.o"
 ".\objects\spi.o"
 ".\objects\oled.o"
 ".\objects\oled_data.o"

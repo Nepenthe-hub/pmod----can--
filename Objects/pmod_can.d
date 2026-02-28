@@ -30,3 +30,6 @@
 .\objects\pmod_can.o: .\Library\stm32f10x_wwdg.h
 .\objects\pmod_can.o: .\Library\misc.h
 .\objects\pmod_can.o: Hardware\CH9434.h
+.\objects\pmod_can.o: Hardware\SPI.h
+.\objects\pmod_can.o: .\System\Delay.h
+.\objects\pmod_can.o: D:\keil_5\ARM\ARMCC\Bin\..\include\string.h
