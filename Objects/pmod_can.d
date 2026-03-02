@@ -33,3 +33,4 @@
 .\objects\pmod_can.o: Hardware\SPI.h
 .\objects\pmod_can.o: .\System\Delay.h
 .\objects\pmod_can.o: D:\keil_5\ARM\ARMCC\Bin\..\include\string.h
+.\objects\pmod_can.o: D:\keil_5\ARM\ARMCC\Bin\..\include\stdio.h

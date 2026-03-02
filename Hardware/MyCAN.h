@@ -20,5 +20,6 @@ void MyCAN_Receive(CanRxMsg *RxMessage);
 uint8_t MyCAN_GetErrorStatus(void);
 uint32_t MyCAN_GetLastError(void);
 uint32_t MyCAN_GetPendingCount(void);
+uint8_t  MyCAN_LoopbackTest(void);
 
 #endif

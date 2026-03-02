@@ -27,47 +27,11 @@ CanRxMsg RxMsg;
 int main(void)
 {
 	UART1_Init(115200);
-	printf("\r\n[BOOT] UART OK\r\n");
-
 	Key_Init();
-	printf("[BOOT] Key OK\r\n");
-
 	MyCAN_Init();
-	printf("[BOOT] MyCAN OK (125kbps, Normal)\r\n");
-
-	/* 初始化 PMOD CAN */
-	printf("[BOOT] Init CH9434D CAN...\r\n");
 	PMOD_CAN_Init();
-	printf("[BOOT] PMOD Init %s\r\n", PMOD_CAN_IsReady() ? "OK" : "FAIL");
-
-	/* ========== CH9434D CAN Loopback 自测 ========== */
-	if (PMOD_CAN_IsReady()) {
-		printf("\r\n[SELF-TEST] CH9434D CAN Loopback...\r\n");
-		uint8_t lbResult = PMOD_CAN_LoopbackTest();
-		printf("[SELF-TEST] Loopback %s\r\n\r\n", lbResult ? "PASS" : "FAIL <<<");
-
-		/* 自测完成后重新初始化回 Normal 模式 */
-		printf("[BOOT] Re-init CH9434D CAN (Normal mode)...\r\n");
-		PMOD_CAN_Init();
-		printf("[BOOT] PMOD re-init %s\r\n", PMOD_CAN_IsReady() ? "OK" : "FAIL");
-	}
-
 	Timer_Init();
-	printf("[BOOT] Timer OK\r\n");
 
-	/* 串口显示初始化信息 */
-	{
-		uint8_t ioRaw[4] = {0};
-		printf("========================================\r\n");
-		printf("PMOD TX / Hardware CAN RX System\r\n");
-		printf("  CH9434D Official Driver, 125kbps\r\n");
-		printf("========================================\r\n");
-		printf("[CAN MAP] %s\r\n", MYCAN_USE_REMAP_PB8_PB9 ? "PB8/PB9" : "PA11/PA12");
-		PMOD_CAN_ReadIOFuncRaw(ioRaw);
-		printf("[CH9434 IO_SEL] 45h: %02X %02X %02X %02X\r\n", ioRaw[0], ioRaw[1], ioRaw[2], ioRaw[3]);
-		printf("[CH9434] Ready=%d CTLR=0x%02X\r\n", PMOD_CAN_IsReady(), PMOD_CAN_GetMode());
-	}
-	
 	while (1)
 	{
 		/* 定时发送（通过PMOD发送CAN）*/
@@ -81,38 +45,18 @@ int main(void)
 			TxMsg_PMOD.Data[2]++;
 			TxMsg_PMOD.Data[3]++;
 			
-			/* 通过PMOD发送，硬件CAN只做接收，不再发送 */
 			uint8_t txResult = PMOD_CAN_Transmit(&TxMsg_PMOD);
 			printf("[PMOD TX %s] ID:0x%03X Data: %02X %02X %02X %02X\r\n",
-					(txResult == 1) ? "OK" : "FAIL",
+					txResult ? "OK" : "FAIL",
 					TxMsg_PMOD.StdId,
 					TxMsg_PMOD.Data[0], TxMsg_PMOD.Data[1],
 					TxMsg_PMOD.Data[2], TxMsg_PMOD.Data[3]);
-
-			if (txResult != 1)
-			{
-				uint8_t ioRawDbg[4] = {0};
-				uint8_t mode = PMOD_CAN_GetMode();
-				PMOD_CAN_ReadIOFuncRaw(ioRawDbg);
-				printf("[CAN DBG] RF0R=%lu ESR=0x%08lX CH9434_ERR=0x%08lX TSR=0x%08lX\r\n",
-						MyCAN_GetPendingCount(), MyCAN_GetLastError(),
-						PMOD_CAN_GetErrorReg(), PMOD_CAN_GetTxStatusReg());
-				printf("  CTLR=0x%02X [%s%s%s%s%s]\r\n", mode,
-						(mode & 0x02) ? "SLEEP " : "",
-						(mode & 0x01) ? "INRQ " : "",
-						(mode & 0x40) ? "ABOM " : "",
-						(mode & 0x20) ? "AWUM " : "",
-						(mode & 0x10) ? "NART " : "");
-				printf("[SPI RAW] 45h: %02X %02X %02X %02X\r\n",
-						ioRawDbg[0], ioRawDbg[1], ioRawDbg[2], ioRawDbg[3]);
-			}
 		}
 		
-		/* 按键触发发送（可选功能）*/
+		/* 按键触发发送 */
 		KeyNum = Key_GetNum();
 		if (KeyNum == 1)
 		{
-			/* 按键1：手动触发发送 - 所有数据都加10保持一致性 */
 			TxMsg_PMOD.Data[0] += 10;
 			TxMsg_PMOD.Data[1] += 10;
 			TxMsg_PMOD.Data[2] += 10;
@@ -124,28 +68,16 @@ int main(void)
 					TxMsg_PMOD.Data[2], TxMsg_PMOD.Data[3]);
 		}
 		
-		/* 硬件CAN接收（接收来自其他设备的CAN消息）*/
+		/* 硬件CAN接收 */
 		if (MyCAN_ReceiveFlag())
 		{
 			MyCAN_Receive(&RxMsg);
 			
-			/* 串口显示硬件CAN接收到的数据 */
-			if (RxMsg.RTR == CAN_RTR_Data)  // 只显示数据帧
+			if (RxMsg.RTR == CAN_RTR_Data)
 			{
-				printf("[HW CAN RX] ID:0x%03X DLC:%d Data: %02X %02X %02X %02X %02X %02X %02X %02X\r\n",
+				printf("[HW CAN RX] ID:0x%03X DLC:%d Data: %02X %02X %02X %02X %02X %02X\r\n",
 						RxMsg.StdId, RxMsg.DLC,
-						RxMsg.Data[0], RxMsg.Data[1], RxMsg.Data[2], RxMsg.Data[3],
-						RxMsg.Data[4], RxMsg.Data[5], RxMsg.Data[6], RxMsg.Data[7]);
-			}
-		}
-		else if (TimingFlag == 0)
-		{
-			static uint16_t rxIdleCounter = 0;
-			rxIdleCounter++;
-			if (rxIdleCounter >= 50000)
-			{
-				rxIdleCounter = 0;
-				printf("[CAN WAIT] RF0R=%lu ESR=0x%08lX\r\n", MyCAN_GetPendingCount(), MyCAN_GetLastError());
+						RxMsg.Data[0], RxMsg.Data[1], RxMsg.Data[2], RxMsg.Data[3]);
 			}
 		}
 	}

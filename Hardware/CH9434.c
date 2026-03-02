@@ -1076,11 +1076,19 @@ u32_t CH9434ReadCANReg (u8_t reg_add) {
     CH9434_SPI_WRITE_BYTE (CH9434_REG_OP_READ | CH9434D_CAN_REG);
     CH9434_US_DELAY();
     CH9434_US_DELAY();
+    CH9434_US_DELAY();
     CH9434_SPI_WRITE_BYTE (reg_add);
     CH9434_US_DELAY();
     CH9434_US_DELAY();
-    for (i = 0; i < 4; i++) dat[i] = CH9434_SPI_WRITE_BYTE (0xff);
+    CH9434_US_DELAY();
+    CH9434_US_DELAY();
+    for (i = 0; i < 4; i++) {
+        dat[i] = CH9434_SPI_WRITE_BYTE (0xff);
+        CH9434_US_DELAY();
+    }
     CH9434_SPI_SCS_OP (CH9434_ENABLE);
+    CH9434_US_DELAY();
+    CH9434_US_DELAY();
     CH9434_US_DELAY();
 #endif
 

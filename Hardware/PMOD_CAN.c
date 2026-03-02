@@ -2,6 +2,7 @@
 #include "CH9434.h"
 #include "SPI.h"
 #include "Delay.h"
+#include "stm32f10x_can.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -107,15 +108,15 @@ void PMOD_CAN_Init(void)
     printf("[CH9434] HSE/CLK/CAN IO enabled\r\n");
 
     /* 6. 配置 CAN 参数 — 125kbps, 正常模式
-     *    波特率 = 96MHz / (Prescaler * (1 + BS1 + BS2))
-     *           = 96MHz / (96 * (1 + 5 + 2))
-     *           = 96MHz / 768 = 125kbps
      *
-     *    官方 EVT 参数 (500kbps):
-     *      SJW=1, BS1=6, BS2=5, BRP=16 -> 96M/(16*12)=500k
+     *    ★ 实测发现 CH9434D CAN 时钟实际为 8MHz (非 96MHz) ★
+     *    波特率扫描证实 BRP=8 时 STM32 CAN 可成功接收
      *
-     *    注意: CAN_NART 使用 ENABLE_T (禁止自动重传)
-     *          与官方 EVT 一致, 避免总线上无 ACK 时无限重发
+     *    波特率 = 8MHz / (Prescaler * (1 + BS1 + BS2))
+     *           = 8MHz / (8 * (1 + 5 + 2))
+     *           = 8MHz / 64 = 125kbps
+     *
+     *    采样点 = (1+5)/(1+5+2) = 75%
      */
     memset(&canInit, 0, sizeof(canInit));
     canInit.CAN_TTCM = DISABLE_T;
@@ -128,15 +129,25 @@ void PMOD_CAN_Init(void)
     canInit.CAN_SJW  = CH9434D_CAN_SJW_tq(1);    /* SJW = 1 tq */
     canInit.CAN_BS1  = CH9434D_CAN_BS1_tq(5);     /* BS1 = 5 tq */
     canInit.CAN_BS2  = CH9434D_CAN_BS2_tq(2);     /* BS2 = 2 tq */
-    canInit.CAN_Prescaler = 96;
-    /* 波特率 = 96MHz / (96 * (1+5+2)) = 96MHz / 768 = 125kbps */
+    canInit.CAN_Prescaler = 8;
+    /* 波特率 = 8MHz / (8 * (1+5+2)) = 8MHz / 64 = 125kbps */
 
     result = CH9434D_CAN_Init(&canInit);
     {
-        u32_t ctlr_after = CH9434ReadCANReg(CH9434D_CAN_CTLR);
+        u32_t ctlr_after  = CH9434ReadCANReg(CH9434D_CAN_CTLR);
         u32_t statr_after = CH9434ReadCANReg(CH9434D_CAN_STATR);
+        u32_t btimr_after = CH9434ReadCANReg(CH9434D_CAN_BTIMR);
         printf("[CH9434] CAN_Init result=%d CTLR=0x%08lX STATR=0x%08lX\r\n",
                result, (unsigned long)ctlr_after, (unsigned long)statr_after);
+        printf("[CH9434] BTIMR=0x%08lX (expect 0x00140007 for 8MHz/125k)\r\n",
+               (unsigned long)btimr_after);
+        printf("  BRP=%lu BS1=%lu BS2=%lu SJW=%lu Mode=%lu%lu\r\n",
+               (unsigned long)((btimr_after & 0x3FF) + 1),
+               (unsigned long)(((btimr_after >> 16) & 0xF) + 1),
+               (unsigned long)(((btimr_after >> 20) & 0x7) + 1),
+               (unsigned long)(((btimr_after >> 24) & 0x3) + 1),
+               (unsigned long)((btimr_after >> 31) & 1),
+               (unsigned long)((btimr_after >> 30) & 1));
     }
     if (result == CH9434D_CAN_InitStatus_Success) {
         g_pmod_can_ready = 1;
@@ -188,16 +199,20 @@ uint8_t PMOD_CAN_Transmit(CanTxMsg *TxMessage)
     u8_t mailbox;
     u16_t timeout = 0;
     uint8_t i;
+    uint8_t retry;
 
     if (!g_pmod_can_ready || TxMessage == 0) {
         return 0;
     }
 
-    /* 确保 CAN 控制器不在睡眠模式（解决 Mode=0x5A / SLEEP位置位问题） */
-    {
+    /* 确保 CAN 控制器不在睡眠模式 — 多次确认 */
+    for (retry = 0; retry < 3; retry++) {
         u32_t ctlr = CH9434ReadCANReg(CH9434D_CAN_CTLR);
         if (ctlr & CH9434D_CAN_CTLR_SLEEP) {
             CH9434D_CAN_WakeUp();
+            Delay_ms(2);
+        } else {
+            break;
         }
     }
 
@@ -218,18 +233,27 @@ uint8_t PMOD_CAN_Transmit(CanTxMsg *TxMessage)
         txMsg.Data[i] = TxMessage->Data[i];
     }
 
-    /* 发送 */
-    mailbox = CH9434D_CAN_Transmit(&txMsg);
-    if (mailbox == CH9434D_CAN_TxStatus_NoMailBox) {
-        return 0;
+    /* 发送（最多重试2次） */
+    for (retry = 0; retry < 2; retry++) {
+        mailbox = CH9434D_CAN_Transmit(&txMsg);
+        if (mailbox == CH9434D_CAN_TxStatus_NoMailBox) {
+            Delay_ms(5);
+            continue;
+        }
+
+        /* 等待发送完成 — 增大超时以适应物理总线延迟 */
+        timeout = 0;
+        while ((CH9434D_CAN_TransmitStatus(mailbox) != CH9434D_CAN_TxStatus_Ok) && (timeout < 0x2FFF)) {
+            timeout++;
+            Delay_us(10);  /* 避免过于密集的SPI读取 */
+        }
+
+        if (timeout < 0x2FFF) {
+            return 1;
+        }
     }
 
-    /* 等待发送完成 */
-    while ((CH9434D_CAN_TransmitStatus(mailbox) != CH9434D_CAN_TxStatus_Ok) && (timeout < 0xFFF)) {
-        timeout++;
-    }
-
-    return (timeout < 0xFFF) ? 1 : 0;
+    return 0;
 }
 
 /**
@@ -314,6 +338,30 @@ uint8_t PMOD_CAN_ReadIOFuncRaw(uint8_t out4[4])
 }
 
 /**
+  * @brief  获取 CH9434D CAN 位时序寄存器
+  */
+uint32_t PMOD_CAN_GetBitTimingReg(void)
+{
+    return (uint32_t)CH9434ReadCANReg(CH9434D_CAN_BTIMR);
+}
+
+/**
+  * @brief  读取 CAN 引脚功能使能状态 (0=关, 1=开, 其他=异常)
+  */
+uint8_t PMOD_CAN_GetCANPinStatus(void)
+{
+    return CH9434ReadDefIOFuncEnSta(CH9434D_DEF_CAN_ADD);
+}
+
+/**
+  * @brief  读取 HSE 引脚功能使能状态
+  */
+uint8_t PMOD_CAN_GetHSEPinStatus(void)
+{
+    return CH9434ReadDefIOFuncEnSta(CH9434D_DEF_HSE_ADD);
+}
+
+/**
   * @brief  CH9434D CAN Loopback 自测
   *         临时切入 Loopback 模式，发一帧、收一帧，验证 CAN 控制器内部正常
   * @retval 1: 自测通过, 0: 失败
@@ -340,7 +388,7 @@ uint8_t PMOD_CAN_LoopbackTest(void)
     canInit.CAN_SJW  = CH9434D_CAN_SJW_tq(1);
     canInit.CAN_BS1  = CH9434D_CAN_BS1_tq(5);
     canInit.CAN_BS2  = CH9434D_CAN_BS2_tq(2);
-    canInit.CAN_Prescaler = 96;
+    canInit.CAN_Prescaler = 8;  /* 实测 CAN 时钟 8MHz */
 
     result = CH9434D_CAN_Init(&canInit);
     if (result != CH9434D_CAN_InitStatus_Success) {

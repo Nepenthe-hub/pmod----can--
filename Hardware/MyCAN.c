@@ -111,3 +111,89 @@ uint32_t MyCAN_GetPendingCount(void)
 {
 	return (CAN1->RF0R & 0x03);
 }
+
+/**
+  * @brief  STM32 CAN 自回环测试
+  *         切入 Loopback 模式，发一帧、收一帧，验证 STM32 CAN 外设工作正常
+  * @retval 1: 通过, 0: 失败
+  */
+uint8_t MyCAN_LoopbackTest(void)
+{
+	CAN_InitTypeDef CAN_InitStructure;
+	CAN_FilterInitTypeDef CAN_FilterInitStructure;
+	CanTxMsg txMsg;
+	CanRxMsg rxMsg;
+	uint8_t txMbox;
+	uint32_t timeout;
+
+	/* 1. 重新初始化 CAN 为 Loopback 模式 */
+	CAN_DeInit(CAN1);
+
+	CAN_StructInit(&CAN_InitStructure);
+	CAN_InitStructure.CAN_Mode = CAN_Mode_LoopBack;
+	CAN_InitStructure.CAN_Prescaler = 36;
+	CAN_InitStructure.CAN_BS1 = CAN_BS1_5tq;
+	CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq;
+	CAN_InitStructure.CAN_SJW = CAN_SJW_1tq;
+	CAN_InitStructure.CAN_NART = DISABLE;
+	CAN_InitStructure.CAN_ABOM = ENABLE;
+	CAN_Init(CAN1, &CAN_InitStructure);
+
+	CAN_FilterInitStructure.CAN_FilterNumber = 0;
+	CAN_FilterInitStructure.CAN_FilterIdHigh = 0x0000;
+	CAN_FilterInitStructure.CAN_FilterIdLow = 0x0000;
+	CAN_FilterInitStructure.CAN_FilterMaskIdHigh = 0x0000;
+	CAN_FilterInitStructure.CAN_FilterMaskIdLow = 0x0000;
+	CAN_FilterInitStructure.CAN_FilterScale = CAN_FilterScale_32bit;
+	CAN_FilterInitStructure.CAN_FilterMode = CAN_FilterMode_IdMask;
+	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;
+	CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;
+	CAN_FilterInit(&CAN_FilterInitStructure);
+
+	/* 2. 发送测试帧 */
+	txMsg.StdId = 0x7FE;
+	txMsg.ExtId = 0;
+	txMsg.IDE = CAN_Id_Standard;
+	txMsg.RTR = CAN_RTR_Data;
+	txMsg.DLC = 4;
+	txMsg.Data[0] = 0xCA;
+	txMsg.Data[1] = 0xFE;
+	txMsg.Data[2] = 0xBE;
+	txMsg.Data[3] = 0xEF;
+
+	txMbox = CAN_Transmit(CAN1, &txMsg);
+
+	timeout = 0;
+	while (CAN_TransmitStatus(CAN1, txMbox) != CAN_TxStatus_Ok && timeout < 100000) {
+		timeout++;
+	}
+	if (timeout >= 100000) {
+		MyCAN_Init();  /* 恢复 Normal 模式 */
+		return 0;
+	}
+
+	/* 3. 等待接收 */
+	timeout = 0;
+	while (CAN_MessagePending(CAN1, CAN_FIFO0) == 0 && timeout < 100000) {
+		timeout++;
+	}
+	if (timeout >= 100000) {
+		MyCAN_Init();
+		return 0;
+	}
+
+	/* 4. 验证接收数据 */
+	CAN_Receive(CAN1, CAN_FIFO0, &rxMsg);
+
+	uint8_t pass = (rxMsg.StdId == 0x7FE &&
+					rxMsg.DLC == 4 &&
+					rxMsg.Data[0] == 0xCA &&
+					rxMsg.Data[1] == 0xFE &&
+					rxMsg.Data[2] == 0xBE &&
+					rxMsg.Data[3] == 0xEF) ? 1 : 0;
+
+	/* 5. 恢复为 Normal 模式 */
+	MyCAN_Init();
+
+	return pass;
+}

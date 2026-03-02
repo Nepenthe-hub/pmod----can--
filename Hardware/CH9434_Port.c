@@ -14,10 +14,11 @@
 
 /**
   * @brief  微秒级延时，官方驱动内部时序使用
+  *         软件SPI时序抖动较大，需要比硬件SPI更长的延时
   */
 void CH9434_US_DELAY(void)
 {
-    Delay_us(1);
+    Delay_us(5);
 }
 
 /**
